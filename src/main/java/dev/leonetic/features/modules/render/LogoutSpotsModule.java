@@ -2,6 +2,7 @@ package dev.leonetic.features.modules.render;
 
 import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.network.DisconnectEvent;
+import dev.leonetic.event.impl.network.PacketEvent;
 import dev.leonetic.event.impl.render.Render2DEvent;
 import dev.leonetic.event.impl.render.Render3DEvent;
 import dev.leonetic.event.system.Subscribe;
@@ -11,6 +12,8 @@ import dev.leonetic.util.render.MatrixCapture;
 import dev.leonetic.util.render.WireframeEntityRenderer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
@@ -21,6 +24,7 @@ import net.minecraft.world.phys.Vec3;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class LogoutSpotsModule extends Module {
 
@@ -34,18 +38,12 @@ public class LogoutSpotsModule extends Module {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
 
-    private final Map<UUID, SpotData>   playerCache       = new HashMap<>();
-
-    private final Map<UUID, LogoutSpot> loggedPlayers     = new HashMap<>();
-
-    private final Map<UUID, Integer>    ticksOnPlayerList = new HashMap<>();
+    private final Map<UUID, SpotData>   playerCache       = new ConcurrentHashMap<>();
+    private final Map<UUID, LogoutSpot> loggedPlayers     = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer>    ticksOnPlayerList = new ConcurrentHashMap<>();
 
     private ResourceKey<Level> lastDimension = null;
     private ClientLevel lastLevel = null;
-
-    private Set<UUID> previousTabList = new HashSet<>();
-
-    private Set<UUID> previouslyVisible = new HashSet<>();
 
     public LogoutSpotsModule() {
         super("LogoutSpots", "Shows where players logged out with a wireframe avatar", Category.RENDER);
@@ -69,42 +67,20 @@ public class LogoutSpotsModule extends Module {
         if (mc.level != lastLevel || (lastDimension != null && !dim.equals(lastDimension))) {
             playerCache.clear();
             ticksOnPlayerList.clear();
-            previousTabList.clear();
-            previouslyVisible.clear();
         }
         lastLevel = mc.level;
         lastDimension = dim;
 
-        Set<UUID> currentlyVisible = new HashSet<>();
         for (Player player : mc.level.players()) {
             if (player == mc.player) continue;
-            UUID id = player.getUUID();
-            playerCache.put(id, new SpotData(player));
-            currentlyVisible.add(id);
-        }
-
-        Set<UUID> currentTabList = new HashSet<>();
-        for (var info : mc.getConnection().getOnlinePlayers()) {
-            currentTabList.add(info.getProfile().id());
-        }
-
-        for (UUID uuid : previousTabList) {
-            if (!currentTabList.contains(uuid) && !loggedPlayers.containsKey(uuid)) {
-                if (previouslyVisible.contains(uuid)) {
-                    SpotData data = playerCache.get(uuid);
-                    if (data != null) {
-                        loggedPlayers.put(uuid, new LogoutSpot(data, dim));
-                    }
-                }
-                ticksOnPlayerList.remove(uuid);
-            }
+            playerCache.put(player.getUUID(), new SpotData(player, dim));
         }
 
         loggedPlayers.entrySet().removeIf(entry -> {
             UUID uuid = entry.getKey();
-            if (currentTabList.contains(uuid)) {
-                int n = ticksOnPlayerList.getOrDefault(uuid, 0) + 1;
-                ticksOnPlayerList.put(uuid, n);
+            if (mc.getConnection().getPlayerInfo(uuid) != null) {
+                int n = ticksOnPlayerList.getOrDefault(uuid, 0);
+                ticksOnPlayerList.put(uuid, n + 1);
                 if (n > 1) {
                     ticksOnPlayerList.remove(uuid);
                     return true;
@@ -114,9 +90,23 @@ public class LogoutSpotsModule extends Module {
             }
             return false;
         });
+    }
 
-        previousTabList = currentTabList;
-        previouslyVisible = currentlyVisible;
+    @Subscribe
+    private void onPacketReceive(PacketEvent.Receive event) {
+        if (event.getPacket() instanceof ClientboundPlayerInfoRemovePacket pkt) {
+            for (UUID id : pkt.profileIds()) {
+                if (loggedPlayers.containsKey(id)) continue;
+                SpotData data = playerCache.get(id);
+                if (data == null) continue;
+                loggedPlayers.put(id, new LogoutSpot(data));
+            }
+        } else if (event.getPacket() instanceof ClientboundPlayerInfoUpdatePacket pkt
+                && pkt.actions().contains(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER)) {
+            for (ClientboundPlayerInfoUpdatePacket.Entry e : pkt.entries()) {
+                loggedPlayers.remove(e.profileId());
+            }
+        }
     }
 
     @Override
@@ -176,8 +166,6 @@ public class LogoutSpotsModule extends Module {
         loggedPlayers.clear();
         playerCache.clear();
         ticksOnPlayerList.clear();
-        previousTabList.clear();
-        previouslyVisible.clear();
         lastDimension = null;
         lastLevel = null;
     }
@@ -196,12 +184,14 @@ public class LogoutSpotsModule extends Module {
         final ItemStack mainHand;
         final ItemStack offHand;
         final int totemPops;
+        final ResourceKey<Level> dimension;
 
-        SpotData(Player player) {
+        SpotData(Player player, ResourceKey<Level> dimension) {
             this.name      = player.getGameProfile().name();
             this.uuid      = player.getUUID();
             this.pos       = player.position();
             this.entity    = player;
+            this.dimension = dimension;
             this.totemPops = Homovore.playerInfoManager.getTotemPops(player.getUUID());
             this.mainHand  = player.getMainHandItem().copy();
             this.offHand   = player.getOffhandItem().copy();
@@ -226,7 +216,7 @@ public class LogoutSpotsModule extends Module {
 
         public List<float[][]> capturedGeometry = null;
 
-        LogoutSpot(SpotData data, ResourceKey<Level> dimension) {
+        LogoutSpot(SpotData data) {
             this.name       = data.name;
             this.uuid       = data.uuid;
             this.pos        = data.pos;
@@ -235,8 +225,8 @@ public class LogoutSpotsModule extends Module {
             this.mainHand   = data.mainHand;
             this.offHand    = data.offHand;
             this.totemPops  = data.totemPops;
+            this.dimension  = data.dimension;
             this.logoutTime = System.currentTimeMillis();
-            this.dimension  = dimension;
         }
     }
 }

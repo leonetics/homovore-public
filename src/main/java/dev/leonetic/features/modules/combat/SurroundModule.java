@@ -217,10 +217,13 @@ public class SurroundModule extends Module {
             ownedQueued.removeIf(p -> !wantedPoses.contains(p));
         }
 
+        List<BlockPos> fireworkUsePoses = new ArrayList<>();
         for (BlockPos pos : fireworkPlacePoses) {
             if (!PlaceUtil.canPlace(pos)) continue;
-
-            if (Homovore.placementManager.placeFireworkAlt(pos, Direction.DOWN, cachedFireworkSlot)) {
+            fireworkUsePoses.add(pos);
+        }
+        if (Homovore.placementManager.placeFireworksAlt(fireworkUsePoses, Direction.DOWN, cachedFireworkSlot)) {
+            for (BlockPos pos : fireworkUsePoses) {
                 fireworkDeployedAt.put(pos.immutable(), now);
             }
         }

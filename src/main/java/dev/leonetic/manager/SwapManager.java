@@ -6,6 +6,7 @@ import dev.leonetic.event.impl.network.PacketEvent;
 import dev.leonetic.event.system.Subscribe;
 import dev.leonetic.features.Feature;
 import dev.leonetic.util.inventory.InventoryUtil;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.world.InteractionHand;
@@ -26,6 +27,13 @@ public class SwapManager extends Feature {
 
     private int useElapsedTicks = 0;
     private int useResetCount = 0;
+
+    private int stalledTicks = 0;
+    private boolean frozenLogged = false;
+    private boolean overdurationLogged = false;
+
+    private static final int STALL_WARN_TICKS = 4;
+    private static final int OVER_DURATION_SLACK = 2;
 
     public void init() {
         EVENT_BUS.register(this);
@@ -49,6 +57,13 @@ public class SwapManager extends Feature {
 
             log("offhand-swap action DURING-USE(" + name(useItem) + ", " + lastRemainingTicks
                     + "t left) by=" + sender());
+        } else if (wasUsing
+                && event.getPacket() instanceof ServerboundContainerClickPacket cc) {
+
+            log("container-click DURING-USE(" + name(useItem) + ", " + lastRemainingTicks
+                    + "t left) container=" + cc.containerId() + " slot=" + cc.slotNum()
+                    + " button=" + cc.buttonNum()
+                    + " (activeSwap=" + holderStr() + ") by=" + sender());
         }
     }
 
@@ -64,6 +79,9 @@ public class SwapManager extends Feature {
             lastRemainingTicks = mc.player.getUseItemRemainingTicks();
             useElapsedTicks = 0;
             useResetCount = 0;
+            stalledTicks = 0;
+            frozenLogged = false;
+            overdurationLogged = false;
             log("use START " + name(useItem) + " hand=" + useHand
                     + " duration=" + useTotalTicks + "t (activeSwap=" + holderStr() + ")");
         } else if (using) {
@@ -82,13 +100,36 @@ public class SwapManager extends Feature {
                 log("use RESET " + name(useItem) + " countdown " + lastRemainingTicks + " -> " + remaining
                         + "t (restart #" + useResetCount + ", elapsed=" + useElapsedTicks
                         + "t, activeSwap=" + holderStr() + ")");
+                stalledTicks = 0;
+            } else if (remaining == lastRemainingTicks) {
+
+                stalledTicks++;
+                if (stalledTicks >= STALL_WARN_TICKS && !frozenLogged) {
+                    frozenLogged = true;
+                    log("use STALL " + name(useItem) + " countdown frozen at " + remaining
+                            + "t for " + stalledTicks + "t (elapsed=" + useElapsedTicks
+                            + "t, resets=" + useResetCount + ", activeSwap=" + holderStr()
+                            + ") — likely GAP-FAIL");
+                }
+            } else {
+                stalledTicks = 0;
             }
+
+            if (!overdurationLogged && useTotalTicks > 0
+                    && useElapsedTicks > useTotalTicks + OVER_DURATION_SLACK) {
+                overdurationLogged = true;
+                log("use OVER-DURATION " + name(useItem) + " still using after " + useElapsedTicks
+                        + "t (expected " + useTotalTicks + "t, remaining=" + remaining
+                        + ", resets=" + useResetCount + ", activeSwap=" + holderStr()
+                        + ") — likely GAP-FAIL");
+            }
+
             lastRemainingTicks = remaining;
         } else if (wasUsing) {
             if (lastRemainingTicks > 2) {
                 log("use STOP " + name(useItem) + " INTERRUPTED after " + useElapsedTicks + "t ("
                         + lastRemainingTicks + "t left of " + useTotalTicks + ", resets=" + useResetCount
-                        + ") — likely GAP-FAIL");
+                        + ", stalls=" + stalledTicks + ") — likely GAP-FAIL");
             } else {
                 log("use STOP " + name(useItem) + " completed in " + useElapsedTicks + "t (duration="
                         + useTotalTicks + "t, resets=" + useResetCount + ")");

@@ -24,6 +24,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -516,8 +517,9 @@ public class PlacementManager extends Feature {
         return true;
     }
 
-    public boolean placeFireworkAlt(BlockPos pos, Direction face, int hotbarSlot) {
+    public boolean placeFireworksAlt(List<BlockPos> poses, Direction face, int hotbarSlot) {
         if (nullCheck()) return false;
+        if (poses.isEmpty()) return false;
         if (mc.player.containerMenu.containerId != 0) return false;
         if (hotbarSlot < 0 || hotbarSlot > 8) return false;
 
@@ -527,17 +529,23 @@ public class PlacementManager extends Feature {
         var conn = mc.getConnection();
         if (conn == null) return false;
 
-        BlockPos neighbour = pos.relative(face);
-        Vec3 hitPos = Vec3.atCenterOf(pos).relative(face, 0.5);
-        Direction hitSide = face.getOpposite();
-        BlockHitResult hit = new BlockHitResult(hitPos, hitSide, neighbour, false);
+        int containerSlot = hotbarSlot + 36;
+        boolean swapped = hotbarSlot != InventoryUtil.selected();
 
-        Result rocket = new Result(hotbarSlot, stack, ResultType.HOTBAR);
-        boolean swapped = !rocket.holding() && InventoryUtil.swapSilent(rocket);
-        try (var handler = ((ClientLevelAccessor) mc.level).homovore$getBlockStatePredictionHandler().startPredicting()) {
-            conn.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND, hit, handler.currentSequence()));
+        if (swapped) InventoryUtil.click(containerSlot, InventoryUtil.selected(), ClickType.SWAP);
+        try {
+            for (BlockPos pos : poses) {
+                BlockPos neighbour = pos.relative(face);
+                Vec3 hitPos = Vec3.atCenterOf(pos).relative(face, 0.5);
+                Direction hitSide = face.getOpposite();
+                BlockHitResult hit = new BlockHitResult(hitPos, hitSide, neighbour, false);
+
+                try (var handler = ((ClientLevelAccessor) mc.level).homovore$getBlockStatePredictionHandler().startPredicting()) {
+                    conn.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND, hit, handler.currentSequence()));
+                }
+            }
         } finally {
-            if (swapped) InventoryUtil.swapBackSilent(rocket);
+            if (swapped) InventoryUtil.click(containerSlot, InventoryUtil.selected(), ClickType.SWAP);
         }
         return true;
     }

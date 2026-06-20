@@ -6,12 +6,16 @@ import dev.leonetic.event.impl.network.PacketEvent;
 import dev.leonetic.event.system.Subscribe;
 import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.settings.Setting;
+import dev.leonetic.util.DamageUtil;
 import dev.leonetic.util.inventory.InventoryUtil;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
@@ -34,6 +38,11 @@ public class OffhandModule extends Module {
     private final Setting<Boolean> debugLog = bool("DebugLog",
             true);
 
+    private final Setting<Boolean> lethalPriority = bool("LethalPriority",
+            true);
+    private final Setting<Boolean> lethalCrystal = bool("LethalCrystal", true);
+    private final Setting<Double> lethalRange = num("LethalRange", 8.0, 1.0, 12.0);
+
     private boolean managingGapple = false;
 
     private int originalSlot = -1;
@@ -44,6 +53,8 @@ public class OffhandModule extends Module {
     private int eatGraceTicks = 0;
 
     private static final int EAT_LATCH_GRACE = 3;
+
+    private static final int MAX_REFILL_ATTEMPTS = 3;
 
     public OffhandModule() {
         super("Offhand", "Keeps a totem in your offhand and swaps the mainhand to a gapple on right-click.", Category.COMBAT);
@@ -70,11 +81,7 @@ public class OffhandModule extends Module {
         if (!InventoryUtil.cursor().isEmpty()) return;
 
         if (!mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) {
-            int slot = findTotem();
-            if (slot != -1) {
-                gapLog("onTick offhand refill -> slot " + slot);
-                moveTotemToOffhand(slot);
-            }
+            refillOffhandTotem();
         }
 
         handleMainhandGapple();
@@ -83,8 +90,9 @@ public class OffhandModule extends Module {
     private void handleMainhandGapple() {
         boolean rmb = mc.options.keyUse.isDown();
         boolean onInteractable = rmb && isInteractableBlock();
+        boolean lethal = lethalPriority.getValue() && isLethalThreat();
 
-        boolean want = rmb && !onInteractable && (isMainhandWeapon() || managingGapple);
+        boolean want = rmb && !onInteractable && !lethal && (isMainhandWeapon() || managingGapple);
 
         if (managingGapple) {
             boolean mainhandIsGapple = mc.player.getMainHandItem().is(Items.ENCHANTED_GOLDEN_APPLE);
@@ -136,10 +144,42 @@ public class OffhandModule extends Module {
         movedFromSlot = -1;
     }
 
-    private void moveTotemToOffhand(int inventorySlot) {
+    private boolean refillOffhandTotem() {
+        if (mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) return true;
+        if (mc.player.containerMenu.containerId != 0) return false;
+        if (!InventoryUtil.cursor().isEmpty()) return false;
 
-        gapLog("swapToOffhand src=" + inventorySlot + " (button 40) PRE-CLICK");
-        InventoryUtil.swapToOffhand(inventorySlot);
+        for (int attempt = 0; attempt < MAX_REFILL_ATTEMPTS; attempt++) {
+            int slot = findTotem();
+            if (slot == -1) {
+                gapLog("offhand refill FAILED — no totem in inventory (attempt " + attempt + ")");
+                return false;
+            }
+
+            if (!mc.player.getInventory().getItem(slot).is(Items.TOTEM_OF_UNDYING)) continue;
+
+            gapLog("swapToOffhand src=" + slot + " (button 40) attempt " + attempt);
+            InventoryUtil.swapToOffhand(slot);
+
+            if (mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) return true;
+        }
+
+        gapLog("offhand refill EXHAUSTED — offhand still empty after " + MAX_REFILL_ATTEMPTS + " attempts");
+        return false;
+    }
+
+    private boolean isLethalThreat() {
+        if (nullCheck() || !lethalCrystal.getValue()) return false;
+
+        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        double range = lethalRange.getValue();
+        AABB area = mc.player.getBoundingBox().inflate(range);
+        for (Entity e : mc.level.getEntities(mc.player, area)) {
+            if (!(e instanceof EndCrystal crystal)) continue;
+            if (mc.player.distanceToSqr(crystal) > range * range) continue;
+            if (DamageUtil.crystalMaxSelfDamage(crystal.position()) + 0.5f >= health) return true;
+        }
+        return false;
     }
 
     @Subscribe(priority = 1)
@@ -152,8 +192,7 @@ public class OffhandModule extends Module {
             if (mc.player.containerMenu.containerId != 0) return;
             gapLog("totem-pop refill (EntityEvent 35, netty thread)");
             mc.player.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
-            int slot = findTotem();
-            if (slot != -1) moveTotemToOffhand(slot);
+            refillOffhandTotem();
         }
     }
 

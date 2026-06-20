@@ -849,7 +849,7 @@ public class AutoCrystalModule extends Module {
         SwapManager.SwapHandle handle = pendingSwapHandle;
         boolean acquiredNow = false;
         if (slot != originalSlot && handle == null) {
-            handle = Homovore.swapManager.acquire("AutoCrystal", 60);
+            handle = Homovore.swapManager.acquire("AutoCrystal", 68);
             if (handle == null) {
                 return;
             }

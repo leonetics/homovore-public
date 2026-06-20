@@ -344,6 +344,8 @@ public class SpeedMineModule extends Module {
         String path;
         if (state.isAir()) {
 
+            if (usingMainhand()) return false;
+
             burst.run();
             shipped = true;
             path = "in-hand(air)";
