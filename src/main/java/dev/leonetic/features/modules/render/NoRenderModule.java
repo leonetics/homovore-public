@@ -28,6 +28,7 @@ public class NoRenderModule extends Module {
     public final Setting<Boolean> noWaterParticle = bool("NoWaterParticle", true).setPage("Particles");
     public final Setting<Boolean> noExplosion = bool("NoExplosion", true).setPage("Particles");
     public final Setting<Boolean> noBlockBreak = bool("NoBreakParticle", false).setPage("Particles");
+    public final Setting<Boolean> noPotion = bool("NoPotionParticle", true).setPage("Particles");
 
     public final Setting<Integer> tileEntity = num("TileEntity", 0, 0, 75).setPage("World");
     public final Setting<Boolean> noLiquid = bool("NoLiquid", false).setPage("World");
@@ -56,7 +57,8 @@ public class NoRenderModule extends Module {
     }
 
     public static NoRenderModule getInstance() {
-        if (Homovore.moduleManager == null) return null;
+        if (Homovore.moduleManager == null)
+            return null;
         return Homovore.moduleManager.getModuleByClass(NoRenderModule.class);
     }
 

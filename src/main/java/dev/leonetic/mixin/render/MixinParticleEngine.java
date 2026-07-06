@@ -14,6 +14,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinParticleEngine {
     @Inject(method = "createParticle", at = @At("HEAD"), cancellable = true)
     private void homovore$noParticles(ParticleOptions particle, double x, double y, double z, double vx, double vy, double vz, CallbackInfoReturnable<Particle> cir) {
+        if (NoRenderModule.isActive(m -> m.noPotion.getValue())
+                && (particle.getType() == ParticleTypes.ENTITY_EFFECT
+                || particle.getType() == ParticleTypes.EFFECT
+                || particle.getType() == ParticleTypes.INSTANT_EFFECT
+                || particle.getType() == ParticleTypes.WITCH)) {
+            cir.setReturnValue(null);
+            return;
+        }
+
         if (NoRenderModule.isActive(m -> m.noExplosion.getValue())
                 && (particle.getType() == ParticleTypes.EXPLOSION || particle.getType() == ParticleTypes.EXPLOSION_EMITTER)) {
             cir.setReturnValue(null);
