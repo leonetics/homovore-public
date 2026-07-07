@@ -64,6 +64,10 @@ public class Module extends Feature implements Jsonable, Toggleable {
         return null;
     }
 
+    public String getMeta() {
+        return null;
+    }
+
     public void enable() {
         this.enabled.setValue(true);
         EVENT_BUS.register(this);

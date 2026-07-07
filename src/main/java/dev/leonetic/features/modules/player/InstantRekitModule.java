@@ -3,6 +3,8 @@ package dev.leonetic.features.modules.player;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.leonetic.event.impl.entity.player.TickEvent;
+import dev.leonetic.event.system.Subscribe;
 import dev.leonetic.features.commands.Command;
 import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.settings.Setting;
@@ -10,6 +12,8 @@ import dev.leonetic.util.inventory.InventoryUtil;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
@@ -28,6 +32,8 @@ public class InstantRekitModule extends Module {
     private final Setting<Boolean> closeOnDone = bool("CloseOnDone", false);
 
     private final Map<Integer, String> kit = new LinkedHashMap<>();
+
+    private boolean firedThisContainer;
 
     public InstantRekitModule() {
         super("InstantRekit", "Restores a saved kit from an open container in a single tick.", Category.PLAYER);
@@ -48,19 +54,21 @@ public class InstantRekitModule extends Module {
         return !kit.isEmpty();
     }
 
-    @Override
-    public void onEnable() {
-        rekit();
-    }
+    @Subscribe
+    private void onTick(TickEvent event) {
+        if (nullCheck()) return;
 
-    @Override
-    public void onDisable() {
+        if (!isContainerOpen()) {
+            firedThisContainer = false;
+            return;
+        }
+
+        if (firedThisContainer) return;
+        firedThisContainer = true;
         rekit();
     }
 
     private void rekit() {
-        if (nullCheck()) return;
-        if (!isContainerOpen()) return;
         if (kit.isEmpty()) {
             Command.sendMessage("{red} No kit saved. Use .savekit while holding your kit.");
             return;
@@ -139,9 +147,16 @@ public class InstantRekitModule extends Module {
     }
 
     private boolean isContainerOpen() {
-        if (!(mc.screen instanceof AbstractContainerScreen<?>) || mc.screen instanceof InventoryScreen) return false;
+        if (!(mc.screen instanceof AbstractContainerScreen<?> screen) || mc.screen instanceof InventoryScreen) return false;
+        if (isEnderChest(screen)) return false;
         AbstractContainerMenu menu = mc.player.containerMenu;
         return menu != null && menu.slots.size() > 36;
+    }
+
+    private boolean isEnderChest(AbstractContainerScreen<?> screen) {
+        Component title = screen.getTitle();
+        if (title.getContents() instanceof TranslatableContents tc && "container.enderchest".equals(tc.getKey())) return true;
+        return title.getString().equalsIgnoreCase("Ender Chest");
     }
 
     private static Item item(String id) {

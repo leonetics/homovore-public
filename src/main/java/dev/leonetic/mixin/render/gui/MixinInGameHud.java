@@ -49,6 +49,13 @@ public abstract class MixinInGameHud {
         }
     }
 
+    @Inject(method = "renderSelectedItemName", at = @At("HEAD"), cancellable = true)
+    private void homovore$noItemName(GuiGraphics context, CallbackInfo ci) {
+        if (NoRenderModule.isActive(m -> m.noItemName.getValue())) {
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "renderPortalOverlay", at = @At("HEAD"), cancellable = true)
     private void homovore$noPortal(GuiGraphics context, float alpha, CallbackInfo ci) {
         if (NoRenderModule.isActive(m -> m.noPortal.getValue())) {

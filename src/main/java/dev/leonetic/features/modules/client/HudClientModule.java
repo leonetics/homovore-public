@@ -28,6 +28,8 @@ public class HudClientModule extends Module {
     public final Setting<ActiveModulesHudModule.SnapTo> activeModulesSnap =
             mode("SnapTo", ActiveModulesHudModule.SnapTo.DEFAULT).setPage("Elements");
 
+    public final Setting<Boolean> coordinatesLeft = bool("Coordinates Left", false).setPage("Elements");
+
     public HudClientModule() {
         super("Hud", "Static-position HUD elements", Category.CLIENT);
         register(new TotemsHudModule(), true);

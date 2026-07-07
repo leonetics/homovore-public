@@ -82,16 +82,23 @@ public class ActiveModulesHudModule extends HudModule implements Jsonable {
             if (module == null) continue;
 
             String display = module.getDisplayName();
+            String metaRaw = module.getMeta();
+            String meta = metaRaw != null ? " (" + metaRaw + ")" : "";
             Bind bind = module.getBind().getKey() > 0 ? module.getBind() : null;
             String suffix = bind != null ? " [" + bind.toString() + "]" : "";
 
-            int width = mc.font.width(display) + mc.font.width(suffix);
+            int width = mc.font.width(display) + mc.font.width(meta) + mc.font.width(suffix);
             int x = screenWidth() - RIGHT_MARGIN - width;
 
             int nameColor = module.isEnabled() ? activeColor : GRAY;
             ctx.drawString(mc.font, display, x, y, nameColor);
+            int cursor = x + mc.font.width(display);
+            if (!meta.isEmpty()) {
+                ctx.drawString(mc.font, meta, cursor, y, GRAY);
+                cursor += mc.font.width(meta);
+            }
             if (!suffix.isEmpty()) {
-                ctx.drawString(mc.font, suffix, x + mc.font.width(display), y, bindColor(module));
+                ctx.drawString(mc.font, suffix, cursor, y, bindColor(module));
             }
 
             y += mc.font.lineHeight;
@@ -108,7 +115,8 @@ public class ActiveModulesHudModule extends HudModule implements Jsonable {
     private int bottomRightTop(HudClientModule hudClient) {
         int linesBelow = 0;
         if (hudClient != null) {
-            if (hudClient.isElementEnabled(CoordinatesHudModule.class)) linesBelow++;
+            if (hudClient.isElementEnabled(CoordinatesHudModule.class)
+                    && !hudClient.coordinatesLeft.getValue()) linesBelow++;
             if (hudClient.isElementEnabled(PingHudModule.class)) linesBelow++;
 
             if (hudClient.isElementEnabled(RadarHudModule.class)) {

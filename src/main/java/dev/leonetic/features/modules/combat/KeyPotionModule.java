@@ -7,8 +7,10 @@ import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.settings.Setting;
 import dev.leonetic.manager.RotationRequest;
 import dev.leonetic.manager.SwapRequest;
+import dev.leonetic.mixin.client.ClientLevelAccessor;
 import dev.leonetic.util.inventory.InventoryUtil;
 import dev.leonetic.util.inventory.Result;
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.item.Items;
 
 import static dev.leonetic.util.inventory.InventoryUtil.FULL_SCOPE;
@@ -27,11 +29,17 @@ public class KeyPotionModule extends Module {
 
         Result potion = InventoryUtil.find(Items.SPLASH_POTION, FULL_SCOPE);
         if (potion.found()) {
+            float yaw = mc.player.getYRot();
+            float pitch = 90f;
             Homovore.rotationManager.submit(new RotationRequest(
-                    "AutoXP", 20, mc.player.getYRot(), 90f, RotationRequest.Mode.SILENT
+                    "KeyPotion", 20, yaw, pitch, RotationRequest.Mode.SILENT
             ));
-            Homovore.swapManager.submit(new SwapRequest("KeyPotion", 40, potion,
-                    () -> mc.gameMode.useItem(mc.player, potion.hand())));
+            mc.gameMode.ensureHasSentCarriedItem();
+            Homovore.swapManager.submit(new SwapRequest("KeyPotion", 40, potion, r -> {
+                try (var handler = ((ClientLevelAccessor) mc.level).homovore$getBlockStatePredictionHandler().startPredicting()) {
+                    mc.getConnection().send(new ServerboundUseItemPacket(r.hand(), handler.currentSequence(), yaw, pitch));
+                }
+            }));
         }
         disable();
     }

@@ -29,6 +29,7 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.core.BlockPos;
@@ -1394,6 +1395,23 @@ public class AutoCrystalModule extends Module {
     @Override
     public String getDisplayInfo() {
         return lastBestDamage > 0 ? String.format("%.1f", lastBestDamage) : null;
+    }
+
+    private final java.util.ArrayDeque<Long> explodeTimes = new java.util.ArrayDeque<>();
+
+    @Subscribe
+    private void onExplodePacket(PacketEvent.Receive event) {
+        if (!(event.getPacket() instanceof ClientboundExplodePacket)) return;
+        long now = System.currentTimeMillis();
+        explodeTimes.addLast(now);
+        while (!explodeTimes.isEmpty() && now - explodeTimes.peekFirst() > 1000) explodeTimes.removeFirst();
+    }
+
+    @Override
+    public String getMeta() {
+        long now = System.currentTimeMillis();
+        while (!explodeTimes.isEmpty() && now - explodeTimes.peekFirst() > 1000) explodeTimes.removeFirst();
+        return String.valueOf(explodeTimes.size());
     }
 
     private record PlaceTarget(BlockPos base, float damage) {}

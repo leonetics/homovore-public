@@ -1,12 +1,15 @@
 package dev.leonetic.features.modules.hud;
 
+import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.render.Render2DEvent;
+import dev.leonetic.features.modules.client.HudClientModule;
 import dev.leonetic.features.modules.client.HudModule;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.level.Level;
 
 public class CoordinatesHudModule extends HudModule {
     private static final int RIGHT_MARGIN = 2;
+    private static final int LEFT_MARGIN = 2;
     private static final int BOTTOM_MARGIN = 2;
     private static final int WHITE = 0xFFFFFFFF;
     private static final int GRAY = 0xFFAAAAAA;
@@ -37,7 +40,9 @@ public class CoordinatesHudModule extends HudModule {
         }
 
         int totalWidth = mc.font.width(main) + mc.font.width(other);
-        int rx = screenWidth() - RIGHT_MARGIN - totalWidth;
+        HudClientModule hudClient = Homovore.moduleManager.getModuleByClass(HudClientModule.class);
+        boolean left = hudClient != null && hudClient.coordinatesLeft.getValue();
+        int rx = left ? LEFT_MARGIN : screenWidth() - RIGHT_MARGIN - totalWidth;
         int ry = bottomAnchor() - BOTTOM_MARGIN - mc.font.lineHeight;
 
         ctx.drawString(mc.font, main, rx, ry, WHITE);

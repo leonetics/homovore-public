@@ -247,9 +247,8 @@ public class SurroundModule extends Module {
 
             wantedPoses.add(corner.immutable());
 
-            if (tryFirework(corner, now, fireworkPlacePoses)) {
-                // firework handled this corner
-            } else if (state.isAir() || state.canBeReplaced()) {
+            if (fireworks.getValue() && tryFirework(corner, now, fireworkPlacePoses)) continue;
+            if (state.isAir() || state.canBeReplaced()) {
                 cornerPlacePoses.add(corner);
             }
         }
@@ -286,8 +285,10 @@ public class SurroundModule extends Module {
 
         // Corners are queued strictly after every edge/floor/head block so the
         // main surround is always completed first; sort them among themselves.
-        cornerPlacePoses.sort(Comparator.comparingDouble(p -> Vec3.atCenterOf(p).distanceToSqr(predicted)));
-        placePoses.addAll(cornerPlacePoses);
+        if (fireworks.getValue()) {
+            cornerPlacePoses.sort(Comparator.comparingDouble(p -> Vec3.atCenterOf(p).distanceToSqr(predicted)));
+            placePoses.addAll(cornerPlacePoses);
+        }
 
         if (attack.getValue() && now - lastAttackTime >= 50) {
 
