@@ -26,6 +26,12 @@ public class MixinParticleEngine {
             return;
         }
 
+        if (NoRenderModule.isActive(m -> m.noPotionParticle.getValue())
+                && particle.getType() == ParticleTypes.ENTITY_EFFECT) {
+            cir.setReturnValue(null);
+            return;
+        }
+
         if (NoRenderModule.isActive(m -> m.noWaterParticle.getValue())
                 && (particle.getType() == ParticleTypes.RAIN
                 || particle.getType() == ParticleTypes.SPLASH

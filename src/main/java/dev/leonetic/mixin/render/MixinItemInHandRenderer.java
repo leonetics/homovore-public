@@ -15,18 +15,29 @@ import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ItemInHandRenderer.class)
 public class MixinItemInHandRenderer {
 
     @Unique
     private boolean handShader$capturing;
+
+    @Shadow
+    private float mainHandHeight;
+    @Shadow
+    private float oMainHandHeight;
+    @Shadow
+    private float offHandHeight;
+    @Shadow
+    private float oOffHandHeight;
 
     private float noSway$savedXBob;
     private float noSway$savedXBobO;
@@ -61,6 +72,22 @@ public class MixinItemInHandRenderer {
         acc.homovore$setXBobO(noSway$savedXBobO);
         acc.homovore$setYBob(noSway$savedYBob);
         acc.homovore$setYBobO(noSway$savedYBobO);
+    }
+
+    @Inject(method = "shouldInstantlyReplaceVisibleItem", at = @At("HEAD"), cancellable = true)
+    private void noSwap$instant(ItemStack visibleStack, ItemStack currentStack, CallbackInfoReturnable<Boolean> cir) {
+        if (NoRenderModule.isActive(m -> m.noSwap.getValue())) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void oldAnimation$tick(CallbackInfo ci) {
+        if (!NoRenderModule.isActive(m -> m.oldAnimation.getValue())) return;
+        mainHandHeight = 1.0f;
+        oMainHandHeight = 1.0f;
+        offHandHeight = 1.0f;
+        oOffHandHeight = 1.0f;
     }
 
     @ModifyArg(
