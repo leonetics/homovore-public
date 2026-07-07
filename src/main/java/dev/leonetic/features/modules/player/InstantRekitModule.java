@@ -3,11 +3,8 @@ package dev.leonetic.features.modules.player;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.leonetic.event.impl.entity.player.TickEvent;
-import dev.leonetic.event.system.Subscribe;
 import dev.leonetic.features.commands.Command;
 import dev.leonetic.features.modules.Module;
-import dev.leonetic.features.settings.Bind;
 import dev.leonetic.features.settings.Setting;
 import dev.leonetic.util.inventory.InventoryUtil;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -27,13 +24,10 @@ import java.util.Map;
 
 public class InstantRekitModule extends Module {
 
-    private final Setting<Bind> trigger = key("Trigger", Bind.none());
     private final Setting<Boolean> topUpStacks = bool("TopUpStacks", true);
     private final Setting<Boolean> closeOnDone = bool("CloseOnDone", false);
 
     private final Map<Integer, String> kit = new LinkedHashMap<>();
-
-    private boolean firedThisContainer;
 
     public InstantRekitModule() {
         super("InstantRekit", "Restores a saved kit from an open container in a single tick.", Category.PLAYER);
@@ -54,20 +48,19 @@ public class InstantRekitModule extends Module {
         return !kit.isEmpty();
     }
 
-    @Subscribe
-    private void onTick(TickEvent event) {
+    @Override
+    public void onEnable() {
+        rekit();
+    }
+
+    @Override
+    public void onDisable() {
+        rekit();
+    }
+
+    private void rekit() {
         if (nullCheck()) return;
-
-        boolean down = !trigger.getValue().isEmpty() && trigger.getValue().isDown();
-        if (!down) firedThisContainer = false;
-
-        if (!isContainerOpen()) {
-            firedThisContainer = false;
-            return;
-        }
-
-        if (!down || firedThisContainer) return;
-        firedThisContainer = true;
+        if (!isContainerOpen()) return;
         if (kit.isEmpty()) {
             Command.sendMessage("{red} No kit saved. Use .savekit while holding your kit.");
             return;
