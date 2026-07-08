@@ -661,6 +661,7 @@ public class AutoMineModule extends Module {
 
     private boolean canBreak(BlockPos pos, BlockState state) {
         if (state.isAir()) return false;
+        if (state.is(Blocks.FIRE) || state.is(Blocks.SOUL_FIRE)) return false;
         return state.getDestroySpeed(mc.level, pos) >= 0;
     }
 
