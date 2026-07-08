@@ -15,6 +15,8 @@ import static dev.leonetic.util.inventory.InventoryUtil.FULL_SCOPE;
 
 public class MiddleClickExtraModule extends Module {
 
+    private static final int SWAP_PRIORITY = 200;
+
     private final Setting<Boolean> fireworkInAir = bool("FireworkInAir", true);
 
     public MiddleClickExtraModule() {
@@ -30,7 +32,7 @@ public class MiddleClickExtraModule extends Module {
         if (fireworkInAir.getValue() && mc.player.isFallFlying()) {
             Result firework = InventoryUtil.find(Items.FIREWORK_ROCKET, FULL_SCOPE);
             if (firework.found()) {
-                Homovore.swapManager.submit(new SwapRequest("MiddleClick.firework", 40, firework,
+                Homovore.swapManager.submit(new SwapRequest("MiddleClick.firework", SWAP_PRIORITY, firework,
                         () -> mc.gameMode.useItem(mc.player, firework.hand())));
             }
             return;
@@ -38,7 +40,7 @@ public class MiddleClickExtraModule extends Module {
 
         Result pearl = InventoryUtil.find(Items.ENDER_PEARL, FULL_SCOPE);
         if (pearl.found()) {
-            Homovore.swapManager.submit(new SwapRequest("MiddleClick.pearl", 40, pearl,
+            Homovore.swapManager.submit(new SwapRequest("MiddleClick.pearl", SWAP_PRIORITY, pearl,
                     () -> mc.gameMode.useItem(mc.player, pearl.hand())));
         }
     }
