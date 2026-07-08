@@ -9,7 +9,6 @@ import java.util.function.Predicate;
 public class NoRenderModule extends Module {
     public final Setting<Boolean> noTilt = bool("NoTilt", true).setPage("Camera");
     public final Setting<Boolean> noBob = bool("NoBob", true).setPage("Camera");
-    public final Setting<Boolean> noSway = bool("NoSway", false).setPage("Camera");
     public final Setting<Boolean> noTotem = bool("NoTotem", true).setPage("Camera");
 
     public final Setting<Boolean> noFire = bool("NoFire", true).setPage("Overlays");
@@ -34,6 +33,7 @@ public class NoRenderModule extends Module {
     public final Setting<Boolean> noWall = bool("NoWall", false).setPage("World");
     public final Setting<Boolean> noFog = bool("NoFog", true).setPage("World");
     public final Setting<Boolean> noDarkness = bool("NoDarkness", true).setPage("World");
+    public final Setting<Boolean> noCrystalFire = bool("NoCrystalFire", false).setPage("World");
 
     public NoRenderModule() {
         super("NoRender", "Prevent rendering certain overlays and visual effects.", Category.RENDER);

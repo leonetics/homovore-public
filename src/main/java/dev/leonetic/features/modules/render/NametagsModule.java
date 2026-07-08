@@ -43,6 +43,7 @@ public class NametagsModule extends Module {
     public Setting<Float>   armorGap    = num("ArmorGap",  2.0f, 0.0f, 20.0f).setPage("Render");
     public Setting<Float>   scale       = num("Scale",     1.0f, 0.1f,  3.0f).setPage("Render");
     public Setting<Float>   minScale    = num("MinScale",  0.3f, 0.1f,  1.0f).setPage("Render");
+    public Setting<Boolean> itemsOnArmor = bool("ItemsOnArmor", false).setPage("Render");
 
     private record PearlEntry(String ownerName, long lastSeenMs) {}
 
@@ -274,14 +275,21 @@ public class NametagsModule extends Module {
 
         if (showItems.getValue()) {
             int slotSize = 16;
-            int itemY = textTopY + textH / 2 - slotSize / 2;
+            int itemY, offX, mainX;
+            if (itemsOnArmor.getValue()) {
+                itemY = textTopY - 1 - armorGap.getValue().intValue() - slotSize;
+                offX  = -(slotSize * 4) / 2 - slotSize;
+                mainX = (slotSize * 4) / 2;
+            } else {
+                itemY = textTopY + textH / 2 - slotSize / 2;
+                offX  = -halfW - 2 - slotSize;
+                mainX = halfW + 2;
+            }
             if (!offHand.isEmpty()) {
-                int offX = -halfW - 2 - slotSize;
                 graphics.renderItem(offHand, offX, itemY);
                 graphics.renderItemDecorations(mc.font, offHand, offX, itemY);
             }
             if (!mainHand.isEmpty()) {
-                int mainX = halfW + 2;
                 graphics.renderItem(mainHand, mainX, itemY);
                 graphics.renderItemDecorations(mc.font, mainHand, mainX, itemY);
             }

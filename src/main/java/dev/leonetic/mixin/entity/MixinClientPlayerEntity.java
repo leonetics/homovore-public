@@ -1,11 +1,14 @@
 package dev.leonetic.mixin.entity;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.leonetic.Homovore;
 import dev.leonetic.event.Stage;
 import dev.leonetic.event.impl.entity.player.PreTickEvent;
 import dev.leonetic.event.impl.entity.player.TickEvent;
 import dev.leonetic.event.impl.entity.player.UpdateWalkingPlayerEvent;
 import dev.leonetic.features.modules.movement.VelocityModule;
+import dev.leonetic.features.modules.movement.NoSlowModule;
+import dev.leonetic.features.modules.movement.SprintModule;
 import dev.leonetic.features.modules.render.NoRenderModule;
 import dev.leonetic.features.modules.world.ScaffoldModule;
 import net.minecraft.client.Minecraft;
@@ -66,6 +69,17 @@ public class MixinClientPlayerEntity {
         method = "aiStep",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/ClientInput;tick()V", shift = At.Shift.AFTER)
     )
+    private void sprint$applyBeforeJump(CallbackInfo ci) {
+        SprintModule sprint = Homovore.moduleManager.getModuleByClass(SprintModule.class);
+        if (sprint != null && sprint.wantsSprint()) {
+            ((LocalPlayer) (Object) this).setSprinting(true);
+        }
+    }
+
+    @Inject(
+        method = "aiStep",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/ClientInput;tick()V", shift = At.Shift.AFTER)
+    )
     private void homovore$moveFixAfterInputTick(CallbackInfo ci) {
         var rotation = Homovore.rotationManager;
         if (rotation == null || !rotation.isRotating() || !rotation.isMoveFixEnabled()) return;
@@ -90,10 +104,18 @@ public class MixinClientPlayerEntity {
         }
     }
 
+    @ModifyExpressionValue(
+        method = "modifyInput",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;itemUseSpeedMultiplier()F")
+    )
+    private float noSlow$eatSpeed(float original) {
+        return NoSlowModule.shouldCancelConsumeSlow() ? 1.0f : original;
+    }
+
     @Inject(method = "isMovingSlowly", at = @At("HEAD"), cancellable = true)
     private void fastCrawl(CallbackInfoReturnable<Boolean> cir) {
         LocalPlayer self = (LocalPlayer) (Object) this;
-        if (self.isVisuallyCrawling()) {
+        if (self.isVisuallyCrawling() && NoSlowModule.isActive(m -> m.crawl.getValue())) {
             cir.setReturnValue(false);
         }
     }

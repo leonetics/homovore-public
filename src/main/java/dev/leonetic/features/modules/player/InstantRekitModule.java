@@ -27,7 +27,9 @@ import java.util.Map;
 
 public class InstantRekitModule extends Module {
 
-    private final Setting<Bind> trigger = key("Trigger", Bind.none());
+    private final Setting<Boolean> always = bool("Always", false);
+    private final Setting<Bind> trigger = key("Trigger", Bind.none())
+            .setVisibility(v -> !always.getValue());
     private final Setting<Boolean> topUpStacks = bool("TopUpStacks", true);
     private final Setting<Boolean> closeOnDone = bool("CloseOnDone", false);
 
@@ -58,7 +60,7 @@ public class InstantRekitModule extends Module {
     private void onTick(TickEvent event) {
         if (nullCheck()) return;
 
-        boolean down = !trigger.getValue().isEmpty() && trigger.getValue().isDown();
+        boolean down = always.getValue() || (!trigger.getValue().isEmpty() && trigger.getValue().isDown());
         if (!down) firedThisContainer = false;
 
         if (!isContainerOpen()) {

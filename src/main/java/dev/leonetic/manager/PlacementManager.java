@@ -489,6 +489,41 @@ public class PlacementManager extends Feature {
         });
     }
 
+    public boolean placeDirect(BlockPos pos, @Nullable Direction face, int hotbarSlot) {
+        if (nullCheck()) return false;
+
+        long now = System.currentTimeMillis();
+        while (!recentPlacements.isEmpty() && now - recentPlacements.peekFirst() >= WINDOW_MS) {
+            recentPlacements.pollFirst();
+        }
+
+        if (usingItemAnyTick()) return false;
+        OffhandModule offhand = Homovore.moduleManager.getModuleByClass(OffhandModule.class);
+        if (offhand != null && offhand.shouldDeferForEat()) return false;
+
+        if (recentPlacements.size() >= WINDOW_LIMIT) return false;
+        if (isOnCooldown(pos)) return false;
+
+        PreparedClick click = prepareClick(new PlacementTask(pos, face, hotbarSlot));
+        if (click == null) return false;
+
+        placing = true;
+        try {
+            int originalSlot = InventoryUtil.selected();
+            sendBurst(List.of(click), hotbarSlot, originalSlot);
+            if (hotbarSlot != originalSlot) {
+                mc.getConnection().send(new ServerboundSetCarriedItemPacket(originalSlot));
+            }
+        } finally {
+            placing = false;
+        }
+
+        long stamp = System.currentTimeMillis();
+        sentAt.put(click.pos(), stamp);
+        recentPlacements.addLast(stamp);
+        return true;
+    }
+
     public boolean placeCrystal(BlockPos base, int hotbarSlot) {
         return placeCrystal(base, hotbarSlot, false);
     }

@@ -24,6 +24,17 @@ public class SprintModule extends Module {
         Homovore.rotationManager.cancel(ROTATION_ID);
     }
 
+    public boolean wantsSprint() {
+        if (!isEnabled() || nullCheck()) return false;
+        if (mc.player.isUsingItem()) return false;
+
+        if (mode.getValue() == Mode.OMNI) {
+            return mc.options.keyUp.isDown() || mc.options.keyDown.isDown()
+                    || mc.options.keyLeft.isDown() || mc.options.keyRight.isDown();
+        }
+        return mc.player.input.getMoveVector().y > 0;
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         if (nullCheck()) return;

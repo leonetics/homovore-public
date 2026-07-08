@@ -4,6 +4,7 @@ import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.entity.TotemPopEvent;
 import dev.leonetic.event.impl.network.ChatEvent;
 import dev.leonetic.features.modules.movement.VelocityModule;
+import dev.leonetic.features.modules.player.NoRotateModule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
@@ -42,7 +43,7 @@ public class MixinClientPlayNetworkHandler {
     private void onHandleMovePlayerPost(ClientboundPlayerPositionPacket packet, CallbackInfo ci) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || Homovore.rotationManager == null) return;
-        if (Homovore.rotationManager.isSilentActive()) {
+        if (Homovore.rotationManager.isSilentActive() || NoRotateModule.isActive()) {
             mc.player.setYRot(rotation$prevYaw);
             mc.player.setXRot(rotation$prevPitch);
         }

@@ -70,6 +70,7 @@ public class BreakIndicatorsModule extends Module {
 
         BreakEntry entry = breaks.computeIfAbsent(pos.asLong(), k -> new BreakEntry(pos.immutable(), mc.level.getGameTime()));
         entry.entity = entity;
+        entry.stage = stage;
         entry.lastUpdate = System.currentTimeMillis();
     }
 
@@ -77,7 +78,6 @@ public class BreakIndicatorsModule extends Module {
     private void onRenderEvent(Render3DEvent event) {
         if (nullCheck() || breaks.isEmpty()) return;
 
-        double currentTick = mc.level.getGameTime() + event.getDelta();
         long time = System.currentTimeMillis();
 
         Iterator<Map.Entry<Long, BreakEntry>> it = breaks.entrySet().iterator();
@@ -95,7 +95,7 @@ public class BreakIndicatorsModule extends Module {
                 continue;
             }
 
-            double progress = predictProgress(entry, state, currentTick);
+            double progress = (entry.stage + 1) / 10.0;
 
             AABB box = shrunkBox(pos, state, progress);
             RenderUtil.drawBoxFilled(event.getMatrix(), box, sideColor.getValue());
@@ -103,16 +103,10 @@ public class BreakIndicatorsModule extends Module {
         }
     }
 
-    private double predictProgress(BreakEntry entry, BlockState state, double currentTick) {
-        int slot = InteractionUtil.fastestToolSlot(state);
-        double speed = InteractionUtil.rawMiningSpeed(slot, state, true);
-        return InteractionUtil.breakDelta(speed, state) * (currentTick - entry.startTick);
-    }
-
     private AABB shrunkBox(BlockPos pos, BlockState state, double progress) {
         VoxelShape shape = state.getShape(mc.level, pos);
         AABB base = shape.isEmpty() ? new AABB(BlockPos.ZERO) : shape.bounds();
-        double scale = Math.clamp(1.0 - progress / completion.getValue(), 0.0, 1.0);
+        double scale = Math.clamp(progress / completion.getValue(), 0.0, 1.0);
 
         double cx = (base.minX + base.maxX) / 2.0;
         double cy = (base.minY + base.maxY) / 2.0;
@@ -129,6 +123,7 @@ public class BreakIndicatorsModule extends Module {
         final BlockPos pos;
         final double startTick;
         Entity entity;
+        int stage;
         long lastUpdate;
 
         BreakEntry(BlockPos pos, double startTick) {

@@ -1,20 +1,25 @@
 package dev.leonetic.mixin.render;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.leonetic.Homovore;
 import dev.leonetic.features.modules.render.CrystalHandModule;
-import dev.leonetic.features.modules.render.NoRenderModule;
 import dev.leonetic.features.modules.render.ShadersModule;
+import dev.leonetic.features.modules.render.ViewModelModule;
 import dev.leonetic.mixin.entity.EntityRotationAccessor;
 import dev.leonetic.util.render.HandShaderRender;
 import dev.leonetic.util.render.HandSilhouetteCollector;
 import dev.leonetic.util.render.TeeSubmitCollector;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -25,8 +30,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ItemInHandRenderer.class)
 public class MixinItemInHandRenderer {
 
+    @Shadow private ItemStack mainHandItem;
+    @Shadow private ItemStack offHandItem;
+
     @Unique
     private boolean handShader$capturing;
+
+    @Unique
+    private boolean viewModel$scaled;
 
     private float noSway$savedXBob;
     private float noSway$savedXBobO;
@@ -35,7 +46,7 @@ public class MixinItemInHandRenderer {
 
     @Inject(method = "renderHandsWithItems", at = @At("HEAD"))
     private void noSway$pre(CallbackInfo ci) {
-        if (!NoRenderModule.isActive(m -> m.noSway.getValue())) return;
+        if (!ViewModelModule.isActive(m -> m.noSway.getValue())) return;
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
         EntityRotationAccessor acc = (EntityRotationAccessor) player;
@@ -53,7 +64,7 @@ public class MixinItemInHandRenderer {
 
     @Inject(method = "renderHandsWithItems", at = @At("RETURN"))
     private void noSway$post(CallbackInfo ci) {
-        if (!NoRenderModule.isActive(m -> m.noSway.getValue())) return;
+        if (!ViewModelModule.isActive(m -> m.noSway.getValue())) return;
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
         EntityRotationAccessor acc = (EntityRotationAccessor) player;
@@ -100,5 +111,60 @@ public class MixinItemInHandRenderer {
         handShader$capturing = false;
         HandShaderRender.capturePaused = false;
         HandShaderRender.flush();
+    }
+
+    @Inject(
+        method = "renderArmWithItem(Lnet/minecraft/client/player/AbstractClientPlayer;FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V",
+        at = @At("HEAD")
+    )
+    private void viewModel$push(AbstractClientPlayer player, float partialTick, float interpolatedPitch,
+                               InteractionHand hand, float swingProgress, ItemStack stack, float equipProgress,
+                               PoseStack poseStack, SubmitNodeCollector collector, int light, CallbackInfo ci) {
+        viewModel$scaled = false;
+        ViewModelModule mod = ViewModelModule.getInstance();
+        if (mod == null || !mod.isEnabled()) return;
+        viewModel$scaled = true;
+
+        HumanoidArm arm = hand == InteractionHand.MAIN_HAND
+                ? player.getMainArm()
+                : player.getMainArm().getOpposite();
+        float sign = arm == HumanoidArm.RIGHT ? 1f : -1f;
+
+        poseStack.pushPose();
+        poseStack.translate(mod.posX.getValue() * sign, mod.posY.getValue(), mod.posZ.getValue());
+        float s = mod.scale.getValue().floatValue();
+        poseStack.translate(0.56 * sign, -0.52, -0.72);
+        poseStack.scale(s, s, s);
+        poseStack.translate(-0.56 * sign, 0.52, 0.72);
+    }
+
+    @Inject(
+        method = "renderArmWithItem(Lnet/minecraft/client/player/AbstractClientPlayer;FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V",
+        at = @At("RETURN")
+    )
+    private void viewModel$pop(AbstractClientPlayer player, float partialTick, float interpolatedPitch,
+                              InteractionHand hand, float swingProgress, ItemStack stack, float equipProgress,
+                              PoseStack poseStack, SubmitNodeCollector collector, int light, CallbackInfo ci) {
+        if (!viewModel$scaled) return;
+        viewModel$scaled = false;
+        poseStack.popPose();
+    }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void viewModel$noSwapAnimation(CallbackInfo ci) {
+        if (!ViewModelModule.isActive(m -> m.noSwapAnimation.getValue())) return;
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null) return;
+        mainHandItem = player.getMainHandItem();
+        offHandItem = player.getOffhandItem();
+    }
+
+    @ModifyExpressionValue(
+        method = "tick",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getItemSwapScale(F)F")
+    )
+    private float viewModel$noSwapScale(float original) {
+        if (ViewModelModule.isActive(m -> m.noSwapAnimation.getValue())) return 1.0f;
+        return original;
     }
 }

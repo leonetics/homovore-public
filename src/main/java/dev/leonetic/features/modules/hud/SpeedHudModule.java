@@ -26,7 +26,7 @@ public class SpeedHudModule extends HudModule {
         String unit = " bps";
 
         int ry = bottomAnchor() - BOTTOM_MARGIN - mc.font.lineHeight;
-        ctx.drawString(mc.font, value, LEFT_MARGIN, ry, WHITE);
-        ctx.drawString(mc.font, unit, LEFT_MARGIN + mc.font.width(value), ry, GRAY);
+        ctx.drawString(mc.font, value, LEFT_MARGIN, ry, GRAY);
+        ctx.drawString(mc.font, unit, LEFT_MARGIN + mc.font.width(value), ry, WHITE);
     }
 }

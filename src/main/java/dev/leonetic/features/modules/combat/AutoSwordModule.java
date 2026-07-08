@@ -14,6 +14,7 @@ import dev.leonetic.features.modules.client.TargetsModule;
 import dev.leonetic.util.render.RenderUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
@@ -45,7 +46,7 @@ public class AutoSwordModule extends Module {
     private final Setting<Boolean> criticals = bool("Criticals", false);
     private final Setting<Boolean> critsWithSword = bool("CritsWithSword", true)
             .setVisibility(v -> criticals.getValue());
-    private final Setting<Boolean> strict = bool("Strict", false)
+    private final Setting<Boolean> strict = bool("Strict", true)
             .setVisibility(v -> criticals.getValue());
 
     private Entity currentTarget = null;
@@ -135,20 +136,15 @@ public class AutoSwordModule extends Module {
             }
 
             if (doCrit) {
-                double px = mc.player.getX();
-                double py = mc.player.getY();
-                double pz = mc.player.getZ();
-                Homovore.positionManager.setPositionPacket(px, py + 0.0625, pz, false, false, false);
-                Homovore.positionManager.setPositionPacket(px, py, pz, false, false, false);
+                double x = mc.player.getX(), y = mc.player.getY(), z = mc.player.getZ();
+                boolean hc = mc.player.horizontalCollision;
+                mc.getConnection().send(new ServerboundMovePlayerPacket.PosRot(x, y,          z, serverYaw, serverPitch, mc.player.onGround(), hc));
+                mc.getConnection().send(new ServerboundMovePlayerPacket.PosRot(x, y + 0.0625, z, serverYaw, serverPitch, false,                 hc));
+                mc.getConnection().send(new ServerboundMovePlayerPacket.PosRot(x, y + 0.045,  z, serverYaw, serverPitch, false,                 hc));
             }
 
             mc.gameMode.attack(mc.player, currentTarget);
             mc.player.swing(InteractionHand.MAIN_HAND);
-
-            if (doCrit) {
-                Homovore.positionManager.setPositionPacket(
-                    mc.player.getX(), mc.player.getY(), mc.player.getZ(), true, false, false);
-            }
 
             if (needSwap) {
                 mc.getConnection().send(new ServerboundSetCarriedItemPacket(originalSlot));
