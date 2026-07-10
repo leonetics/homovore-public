@@ -52,8 +52,8 @@ public class PistonCrystalModule extends Module {
     private final Setting<Boolean> rotate       = bool("Rotate",     true).setPage("General");
     private final Setting<Boolean> offhandPlace = bool("OffhandPlace", true).setPage("General");
     private final Setting<Boolean> autoBase     = bool("AutoBase",   true).setPage("General");
-    private final Setting<Double>  placeRange   = num("PlaceRange",  4.5, 1.0, 6.0).setPage("General");
-    private final Setting<Double>  breakRange   = num("BreakRange",  3.0, 1.0, 6.0).setPage("General");
+    private static final double PLACE_RANGE = 6.0;
+    private static final double BREAK_RANGE = 3.0;
 
     private final Setting<Boolean> render      = bool("Render",      true).setPage("Render");
     private final Setting<Float>   fadeTime    = num("FadeTime",     0.2f, 0.05f, 2.0f).setPage("Render");
@@ -219,7 +219,7 @@ public class PistonCrystalModule extends Module {
 
     private boolean breakCrystalsAround(BlockPos head) {
         Vec3 eye       = mc.player.getEyePosition();
-        double rangeSq = breakRange.getValue() * breakRange.getValue();
+        double rangeSq = BREAK_RANGE * BREAK_RANGE;
         AABB area      = new AABB(head).inflate(1.0);
         boolean found  = false;
         for (var e : mc.level.getEntities(null, area)) {
@@ -246,7 +246,7 @@ public class PistonCrystalModule extends Module {
         Vec3 eye = mc.player.getEyePosition(1.0f);
         if (bb.contains(eye)) return true;
         Vec3 look     = getLookVector(yaw, pitch);
-        Vec3 reachEnd = eye.add(look.scale(breakRange.getValue()));
+        Vec3 reachEnd = eye.add(look.scale(BREAK_RANGE));
         return bb.clip(eye, reachEnd).isPresent();
     }
 
@@ -255,7 +255,7 @@ public class PistonCrystalModule extends Module {
         if (target == null) { lastDamage = 0; return null; }
 
         Vec3  eye   = mc.player.getEyePosition();
-        double range = placeRange.getValue();
+        double range = PLACE_RANGE;
 
         AABB bb = target.getBoundingBox();
         int minX = Mth.floor(bb.minX), maxX = Mth.floor(bb.maxX - 1e-7);
@@ -347,7 +347,7 @@ public class PistonCrystalModule extends Module {
         AABB crystalBox = new AABB(
                 explosionPos.x - 1, explosionPos.y,     explosionPos.z - 1,
                 explosionPos.x + 1, explosionPos.y + 2, explosionPos.z + 1);
-        double breakRangeSq = breakRange.getValue() * breakRange.getValue();
+        double breakRangeSq = BREAK_RANGE * BREAK_RANGE;
         if (distSqToBox(eye, crystalBox) > breakRangeSq) return null;
 
         RedstoneSpot redstone = findRedstoneSpot(pistonPos, dir, explosionPos, eye, rangeSq);

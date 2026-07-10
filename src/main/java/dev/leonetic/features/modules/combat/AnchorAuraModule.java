@@ -43,7 +43,7 @@ public class AnchorAuraModule extends Module {
 
     private final Setting<Double>  minDamage     = num("MinDamage", 6.0, 0.0, 36.0).setPage("General");
     private final Setting<Double>  maxSelfDamage = num("MaxSelfDamage", 4.0, 0.0, 36.0).setPage("General");
-    private final Setting<Double>  placeRange    = num("PlaceRange", 5.0, 1.0, 5.15).setPage("General");
+    private static final double PLACE_RANGE = 6.0;
     private final Setting<Integer> delay         = num("Delay", 2, 0, 20).setPage("General");
     private final Setting<Boolean> render        = bool("Render", true).setPage("Render");
     private final Setting<Float>   fadeTime      = num("FadeTime", 1.0f, 0.05f, 2.0f).setPage("Render");
@@ -189,9 +189,9 @@ public class AnchorAuraModule extends Module {
         BlockPos playerPos = mc.player.blockPosition();
         double maxSelf = maxSelfDamage.getValue();
         double min = minDamage.getValue();
-        double rangeSq = placeRange.getValue() * placeRange.getValue();
+        double rangeSq = PLACE_RANGE * PLACE_RANGE;
         float playerHealth = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        int r = (int) Math.ceil(placeRange.getValue());
+        int r = (int) Math.ceil(PLACE_RANGE);
         int rr = r * r;
 
         Candidate best = null;
@@ -252,7 +252,7 @@ public class AnchorAuraModule extends Module {
     private List<AnchorDamageUtil.Target> collectTargets() {
         TargetsModule targets = Homovore.moduleManager.getModuleByClass(TargetsModule.class);
         List<AnchorDamageUtil.Target> out = new ArrayList<>();
-        AABB area = mc.player.getBoundingBox().inflate(placeRange.getValue() + AnchorDamageUtil.DIAMETER);
+        AABB area = mc.player.getBoundingBox().inflate(PLACE_RANGE + AnchorDamageUtil.DIAMETER);
         for (Entity e : mc.level.getEntities(mc.player, area)) {
             if (!(e instanceof LivingEntity living)) continue;
             if (living.isDeadOrDying()) continue;
