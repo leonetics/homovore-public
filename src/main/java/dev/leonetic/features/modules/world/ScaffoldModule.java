@@ -30,8 +30,6 @@ public class ScaffoldModule extends Module {
 
     private final Setting<Double>  lookahead = num("Lookahead", 1.0, 0.0, 5.0);
 
-    private final Setting<Boolean> airPlace  = bool("AirPlace", true);
-
     private final Setting<Boolean> render    = bool("Render", true).setPage("Render");
     private final Setting<Float>   fadeTime  = num("FadeTime", 0.5f, 0.05f, 2.0f).setPage("Render");
     private final Setting<Float>   lineWidth = num("LineWidth", 1.5f, 0.5f, 5.0f).setPage("Render");
@@ -83,7 +81,6 @@ public class ScaffoldModule extends Module {
                     if (!state.canBeReplaced()) continue;
                     if (!PlaceUtil.canPlace(pos)) continue;
 
-                    if (!airPlace.getValue() && Homovore.placementManager.getPlaceSide(pos) == null) continue;
                     candidates.add(pos.immutable());
                 }
             }

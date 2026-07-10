@@ -16,7 +16,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 import java.awt.Color;
@@ -25,11 +24,10 @@ import java.util.Map;
 
 public class PearlBlockerModule extends Module {
 
-    private final Setting<Boolean> ignoreStasis  = bool("IgnoreStasisChamber", true);
-    private final Setting<Boolean> render        = bool("Render", true);
-    private final Setting<Float>   fadeTime      = num("FadeTime", 1.0f, 0.05f, 2.0f);
-    private final Setting<Color>   fillColor     = color("FillColor", 255, 0, 0, 44);
-    private final Setting<Color>   outlineColor  = color("OutlineColor", 255, 0, 0, 44);
+    private final Setting<Boolean> render        = bool("Render", true).setPage("Render");
+    private final Setting<Float>   fadeTime      = num("FadeTime", 1.0f, 0.05f, 2.0f).setPage("Render");
+    private final Setting<Color>   fillColor     = color("FillColor", 255, 0, 0, 44).setPage("Render");
+    private final Setting<Color>   outlineColor  = color("OutlineColor", 255, 0, 0, 44).setPage("Render");
 
     private final Map<Integer, BlockPos> tracked = new HashMap<>();
     private final Map<BlockPos, Long> renderMap = new HashMap<>();
@@ -68,7 +66,6 @@ public class PearlBlockerModule extends Module {
             if (Homovore.friendManager.isFriend(owner)) continue;
 
             if (pearl.isInWater() && pearl.getDeltaMovement().length() < 0.015) continue;
-            if (ignoreStasis.getValue() && inStasisChamber(pearl)) continue;
 
             int id = pearl.getId();
 
@@ -146,12 +143,6 @@ public class PearlBlockerModule extends Module {
             if (pos.y < mc.level.getMinY() - 5) break;
         }
         return null;
-    }
-
-    private boolean inStasisChamber(ThrownEnderpearl pearl) {
-        BlockPos pos = pearl.blockPosition();
-        return mc.level.getBlockState(pos).is(Blocks.BUBBLE_COLUMN)
-                || mc.level.getBlockState(pos.below()).is(Blocks.BUBBLE_COLUMN);
     }
 
     private static Vec3 stepVelocity(Vec3 vel, boolean inWater) {

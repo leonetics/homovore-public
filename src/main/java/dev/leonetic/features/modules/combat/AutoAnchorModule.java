@@ -19,6 +19,7 @@ import dev.leonetic.util.render.RenderUtil;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
@@ -39,11 +40,11 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AnchorAuraModule extends Module {
+public class AutoAnchorModule extends Module {
 
     private final Setting<Double>  minDamage     = num("MinDamage", 6.0, 0.0, 36.0).setPage("General");
     private final Setting<Double>  maxSelfDamage = num("MaxSelfDamage", 4.0, 0.0, 36.0).setPage("General");
-    private final Setting<Double>  placeRange    = num("PlaceRange", 5.0, 1.0, 5.15).setPage("General");
+    private static final double PLACE_RANGE = 6.0;
     private final Setting<Integer> delay         = num("Delay", 2, 0, 20).setPage("General");
     private final Setting<Boolean> render        = bool("Render", true).setPage("Render");
     private final Setting<Float>   fadeTime      = num("FadeTime", 1.0f, 0.05f, 2.0f).setPage("Render");
@@ -55,8 +56,8 @@ public class AnchorAuraModule extends Module {
     private BlockPos renderPos = null;
     private long renderStart = 0L;
 
-    public AnchorAuraModule() {
-        super("AnchorAura", "Places, charges and detonates respawn anchors in a single burst.", Category.COMBAT);
+    public AutoAnchorModule() {
+        super("AutoAnchor", "Places, charges and detonates respawn anchors in a single burst.", Category.COMBAT);
     }
 
     @Override
@@ -128,7 +129,7 @@ public class AnchorAuraModule extends Module {
         BlockHitResult hit = anchorHit(pos, eye);
         float[] angles = MathUtil.calcAngle(eye, hit.getLocation());
         Homovore.rotationManager.submit(new RotationRequest(
-                "AnchorAura", 62, angles[0], angles[1], RotationRequest.Mode.SILENT));
+                "AutoAnchor", 62, angles[0], angles[1], RotationRequest.Mode.SILENT));
 
         int originalSlot = Homovore.swapManager.serverSlot();
         int returnSlot = isGlowstone(originalSlot) ? anchorSlot : originalSlot;
@@ -139,7 +140,12 @@ public class AnchorAuraModule extends Module {
                 conn.send(new ServerboundSetCarriedItemPacket(anchorSlot));
                 currentSlot = anchorSlot;
             }
-            sendUseItemOn(conn, placeHit);
+
+            conn.send(new ServerboundPlayerActionPacket(
+                    ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ZERO, Direction.DOWN));
+            sendUseItemOn(conn, placeHit, InteractionHand.OFF_HAND);
+            conn.send(new ServerboundPlayerActionPacket(
+                    ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ZERO, Direction.DOWN));
             Homovore.placementManager.notePlacement(pos);
         }
 
@@ -161,8 +167,12 @@ public class AnchorAuraModule extends Module {
     }
 
     private void sendUseItemOn(ClientPacketListener conn, BlockHitResult hit) {
+        sendUseItemOn(conn, hit, InteractionHand.MAIN_HAND);
+    }
+
+    private void sendUseItemOn(ClientPacketListener conn, BlockHitResult hit, InteractionHand hand) {
         try (var handler = ((ClientLevelAccessor) mc.level).homovore$getBlockStatePredictionHandler().startPredicting()) {
-            conn.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND, hit, handler.currentSequence()));
+            conn.send(new ServerboundUseItemOnPacket(hand, hit, handler.currentSequence()));
         }
     }
 
@@ -189,9 +199,9 @@ public class AnchorAuraModule extends Module {
         BlockPos playerPos = mc.player.blockPosition();
         double maxSelf = maxSelfDamage.getValue();
         double min = minDamage.getValue();
-        double rangeSq = placeRange.getValue() * placeRange.getValue();
+        double rangeSq = PLACE_RANGE * PLACE_RANGE;
         float playerHealth = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        int r = (int) Math.ceil(placeRange.getValue());
+        int r = (int) Math.ceil(PLACE_RANGE);
         int rr = r * r;
 
         Candidate best = null;
@@ -236,11 +246,12 @@ public class AnchorAuraModule extends Module {
                         any = true;
                     }
                     if (!any || total < min) continue;
-                    if (best != null && total <= best.damage) continue;
 
                     float self = AnchorDamageUtil.selfDamage(center, pos);
+                    if (best != null && total <= best.damage) continue;
                     if (self > maxSelf) continue;
-                    if (self + 1.5f >= playerHealth) continue;
+
+                    if (self > 0f && self + 1.5f >= playerHealth) continue;
 
                     best = new Candidate(pos, total, !existing);
                 }
@@ -252,7 +263,7 @@ public class AnchorAuraModule extends Module {
     private List<AnchorDamageUtil.Target> collectTargets() {
         TargetsModule targets = Homovore.moduleManager.getModuleByClass(TargetsModule.class);
         List<AnchorDamageUtil.Target> out = new ArrayList<>();
-        AABB area = mc.player.getBoundingBox().inflate(placeRange.getValue() + AnchorDamageUtil.DIAMETER);
+        AABB area = mc.player.getBoundingBox().inflate(PLACE_RANGE + AnchorDamageUtil.DIAMETER);
         for (Entity e : mc.level.getEntities(mc.player, area)) {
             if (!(e instanceof LivingEntity living)) continue;
             if (living.isDeadOrDying()) continue;

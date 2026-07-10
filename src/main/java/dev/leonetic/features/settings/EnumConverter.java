@@ -32,7 +32,14 @@ public class EnumConverter<T extends Enum<T>> extends Converter<T, JsonElement> 
     }
 
     public static <T extends Enum<?>> String getProperName(T clazz) {
-        return Character.toUpperCase(clazz.name().charAt(0)) + clazz.name().toLowerCase().substring(1);
+        String[] parts = clazz.name().toLowerCase().split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+        }
+        return sb.toString();
     }
 
     public JsonElement doForward(Enum anEnum) {

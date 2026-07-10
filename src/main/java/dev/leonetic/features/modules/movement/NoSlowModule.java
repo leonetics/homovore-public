@@ -21,6 +21,7 @@ public class NoSlowModule extends Module {
 
     private static final int SPOOF_DELAY_MOVES  = 1;
     private static final int SPOOF_PACKET_COUNT = 37;
+    private static final float MIN_EAT_TPS      = 15.0f;
 
     private int movesUntilSlotSpoof = 0;
     private int slotSpoofsRemaining = 0;
@@ -54,7 +55,7 @@ public class NoSlowModule extends Module {
 
     @Subscribe
     private void onPacketSend(PacketEvent.Send event) {
-        if (!isEnabled() || !eat.getValue()) return;
+        if (!isEnabled() || !eatEnabled()) return;
         Packet<?> packet = event.getPacket();
 
         if (packet instanceof ServerboundUseItemPacket) {
@@ -104,8 +105,12 @@ public class NoSlowModule extends Module {
         slotSpoofsRemaining--;
     }
 
+    private boolean eatEnabled() {
+        return eat.getValue() && Homovore.tpsCounterService.getLatestTPS() > MIN_EAT_TPS;
+    }
+
     private boolean shouldSpoofActive() {
-        return eat.getValue() && (
+        return eatEnabled() && (
                 isConsumingMainHandItem()
                         || movesUntilSlotSpoof > 0
                         || slotSpoofsRemaining > 0

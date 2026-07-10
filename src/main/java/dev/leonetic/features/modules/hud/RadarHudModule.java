@@ -4,6 +4,7 @@ import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.render.Render2DEvent;
 import dev.leonetic.features.modules.client.HudClientModule;
 import dev.leonetic.features.modules.client.HudModule;
+import dev.leonetic.features.modules.client.HudPosition;
 import dev.leonetic.features.modules.render.NametagsModule;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -16,8 +17,6 @@ import java.util.List;
 import java.util.UUID;
 
 public class RadarHudModule extends HudModule {
-    private static final int RIGHT_MARGIN = 2;
-    private static final int BOTTOM_MARGIN = 2;
     private static final int DEFAULT_POP_COLOR = 0xFFFF5050;
 
     private static final Identifier LOGO = Identifier.fromNamespaceAndPath("homovore", "textures/font/logo_white.png");
@@ -66,13 +65,8 @@ public class RadarHudModule extends HudModule {
         int popColor = resolvePopColor();
         int lineHeight = mc.font.lineHeight;
 
-        int bottomReserved = 0;
-        if (hudClient != null) {
-            if (hudClient.isElementEnabled(CoordinatesHudModule.class)) bottomReserved += lineHeight;
-            if (hudClient.isElementEnabled(PingHudModule.class)) bottomReserved += lineHeight;
-        }
-
-        int baseY = bottomAnchor() - BOTTOM_MARGIN - bottomReserved - lineHeight;
+        int linesBelow = hudClient != null ? hudClient.linesBelow(this) : 0;
+        int baseY = blockTop(HudPosition.BOTTOM_RIGHT, 1, linesBelow, 0);
 
         for (int i = entries.size() - 1, row = 0; i >= 0; i--, row++) {
             Entry entry = entries.get(i);
@@ -85,8 +79,7 @@ public class RadarHudModule extends HudModule {
             int totalW = nameW + popsW;
 
             int y = baseY - row * lineHeight;
-            int x = screenWidth() - RIGHT_MARGIN - totalW;
-            mark(x, y, totalW, lineHeight);
+            int x = lineX(HudPosition.BOTTOM_RIGHT, totalW);
 
             int nameColor = resolveNameColor(hudClient, entry.player);
 
@@ -94,7 +87,6 @@ public class RadarHudModule extends HudModule {
                 int logoSize = lineHeight;
                 int logoX = x - logoSize - LOGO_GAP;
                 int logoY = y + (lineHeight - logoSize) / 2;
-                mark(logoX, logoY, logoSize, logoSize);
                 ctx.blit(RenderPipelines.GUI_TEXTURED, LOGO,
                         logoX, logoY, 0.0f, 0.0f,
                         logoSize, logoSize,

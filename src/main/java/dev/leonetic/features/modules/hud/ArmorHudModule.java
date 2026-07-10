@@ -43,7 +43,6 @@ public class ArmorHudModule extends HudModule {
         int x = rightX - totalWidth;
         int y = screenHeight() - HUNGER_TOP_OFFSET - 1 - ICON;
         if (showingBubbles()) y -= BUBBLE_HEIGHT;
-        mark(x, y, totalWidth, ICON);
 
         GuiGraphics ctx = event.getContext();
         for (int i = 0; i < SLOTS.length; i++) {

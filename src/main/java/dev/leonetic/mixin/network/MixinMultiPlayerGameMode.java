@@ -26,6 +26,7 @@ public class MixinMultiPlayerGameMode {
     private void homovore$useItemRotateHead(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
         if (player != Minecraft.getInstance().player) return;
         if (Homovore.rotationManager == null || !Homovore.rotationManager.isRotating()) return;
+        if (Homovore.rotationManager.isBypassUseSpoof()) return;
 
         homovore$origUseYaw = player.getYRot();
         homovore$origUsePitch = player.getXRot();
@@ -37,6 +38,7 @@ public class MixinMultiPlayerGameMode {
     private void homovore$useItemRotateReturn(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
         if (player != Minecraft.getInstance().player) return;
         if (Homovore.rotationManager == null || !Homovore.rotationManager.isRotating()) return;
+        if (Homovore.rotationManager.isBypassUseSpoof()) return;
 
         player.setYRot(homovore$origUseYaw);
         player.setXRot(homovore$origUsePitch);

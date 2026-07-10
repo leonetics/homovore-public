@@ -1,6 +1,7 @@
 package dev.leonetic.features.commands.impl;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.leonetic.Homovore;
 import dev.leonetic.features.commands.Command;
 import dev.leonetic.features.modules.Module;
@@ -23,6 +24,7 @@ public class ActiveModulesCommand extends Command {
     public void createArgumentBuilder(LiteralArgumentBuilder<CommandManager> builder) {
         builder.then(literal("add")
                         .then(argument("module", word())
+                                .suggests(addSuggestions())
                                 .executes((ctx) -> {
                                     String name = getString(ctx, "module");
                                     Module module = Homovore.moduleManager.getModuleByName(name);
@@ -36,6 +38,7 @@ public class ActiveModulesCommand extends Command {
                                 })))
                 .then(literal("remove")
                         .then(argument("module", word())
+                                .suggests(removeSuggestions())
                                 .executes((ctx) -> {
                                     String name = getString(ctx, "module");
                                     ActiveModulesHudModule h = ActiveModulesHudModule.getInstance();
@@ -62,5 +65,35 @@ public class ActiveModulesCommand extends Command {
                             entries.forEach(joiner::add);
                             return success("ActiveModules (%s): %s", entries.size(), joiner);
                         }));
+    }
+
+    private static SuggestionProvider<CommandManager> addSuggestions() {
+        return (ctx, builder) -> {
+            String input = builder.getRemainingLowerCase();
+            ActiveModulesHudModule h = ActiveModulesHudModule.getInstance();
+            List<String> entries = h != null ? h.getEntries() : List.of();
+            for (Module module : Homovore.moduleManager.getModules()) {
+                String name = module.getName();
+                if (entries.stream().anyMatch(e -> e.equalsIgnoreCase(name))) continue;
+                if (name.toLowerCase().contains(input) || module.getDisplayName().toLowerCase().contains(input)) {
+                    builder.suggest(name);
+                }
+            }
+            return builder.buildFuture();
+        };
+    }
+
+    private static SuggestionProvider<CommandManager> removeSuggestions() {
+        return (ctx, builder) -> {
+            String input = builder.getRemainingLowerCase();
+            ActiveModulesHudModule h = ActiveModulesHudModule.getInstance();
+            if (h == null) return builder.buildFuture();
+            for (String entry : h.getEntries()) {
+                if (entry.toLowerCase().contains(input)) {
+                    builder.suggest(entry);
+                }
+            }
+            return builder.buildFuture();
+        };
     }
 }

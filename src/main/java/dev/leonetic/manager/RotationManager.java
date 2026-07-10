@@ -34,6 +34,8 @@ public class RotationManager {
     private float serverYaw0;
     private float serverDeltaYaw;
 
+    private boolean bypassUseSpoof;
+
     private boolean silentSyncRequired;
     private boolean silentSentThisTick;
     private int silentSentPriority;
@@ -301,6 +303,9 @@ public class RotationManager {
     public void setServerDeltaYaw(float delta) {
         this.serverDeltaYaw = delta;
     }
+
+    public boolean isBypassUseSpoof() { return bypassUseSpoof; }
+    public void setBypassUseSpoof(boolean bypass) { bypassUseSpoof = bypass; }
 
     public boolean isSilentSyncRequired() { return silentSyncRequired; }
 

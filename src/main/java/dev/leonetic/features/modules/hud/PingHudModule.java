@@ -4,6 +4,7 @@ import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.render.Render2DEvent;
 import dev.leonetic.features.modules.client.HudClientModule;
 import dev.leonetic.features.modules.client.HudModule;
+import dev.leonetic.features.modules.client.HudPosition;
 import dev.leonetic.mixin.client.PlayerTabOverlayAccessor;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -14,8 +15,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PingHudModule extends HudModule {
-    private static final int RIGHT_MARGIN = 2;
-    private static final int BOTTOM_MARGIN = 2;
     private static final int WHITE = 0xFFFFFFFF;
     private static final int GRAY = 0xFFAAAAAA;
 
@@ -32,14 +31,12 @@ public class PingHudModule extends HudModule {
         String value = String.valueOf(getPing());
 
         int totalWidth = mc.font.width(label) + mc.font.width(value);
-        int rx = screenWidth() - RIGHT_MARGIN - totalWidth;
-        int ry = bottomAnchor() - BOTTOM_MARGIN - mc.font.lineHeight;
 
         HudClientModule hud = Homovore.moduleManager.getModuleByClass(HudClientModule.class);
-        if (hud != null && hud.isElementEnabled(CoordinatesHudModule.class)) {
-            ry -= mc.font.lineHeight;
-        }
-        mark(rx, ry, totalWidth, mc.font.lineHeight);
+        int linesBelow = hud != null ? hud.linesBelow(this) : 0;
+
+        int rx = lineX(HudPosition.BOTTOM_RIGHT, totalWidth);
+        int ry = blockTop(HudPosition.BOTTOM_RIGHT, 1, linesBelow, 0);
 
         event.getContext().drawString(mc.font, label, rx, ry, WHITE);
         event.getContext().drawString(mc.font, value, rx + mc.font.width(label), ry, GRAY);

@@ -41,10 +41,6 @@ public class SurroundModule extends Module {
 
     private final Setting<Boolean> fireworks     = bool("Fireworks", true).setPage("General");
     private final Setting<Boolean> crystalProtect = bool("CrystalProtect", true).setPage("General");
-    private final Setting<Boolean> safeRocket    = bool("SafeRocket", true).setPage("General");
-    private final Setting<Boolean> keepReplacing = bool("KeepReplacing", true).setPage("General");
-
-    private final Setting<Boolean> test          = bool("Test", false).setPage("General");
 
     private final Setting<Boolean> avoidHelping  = bool("AvoidHelpingOpponents", true).setPage("General");
 
@@ -60,11 +56,8 @@ public class SurroundModule extends Module {
     private final Setting<Float>   fadeTime      = num("FadeTime", 0.2f, 0.05f, 2.0f).setPage("Render");
     private final Setting<Color>   fillColor     = color("FillColor", 0, 62, 122, 148).setPage("Render");
     private final Setting<Color>   outlineColor  = color("OutlineColor", 0, 62, 122, 148).setPage("Render");
-    private final Setting<Color>   rocketFillColor = color("RocketFillColor", 0, 255, 80, 80).setPage("Render");
-    private final Setting<Color>   rocketOutlineColor = color("RocketOutlineColor", 80, 255, 120, 180).setPage("Render");
 
     private final Map<BlockPos, Long> renderMap = new HashMap<>();
-    private final Map<BlockPos, Long> rocketRenderMap = new HashMap<>();
 
     private final Set<BlockPos> wantedPoses = ConcurrentHashMap.newKeySet();
 
@@ -88,10 +81,7 @@ public class SurroundModule extends Module {
 
     private final Set<BlockPos> helpBlockedPoses = ConcurrentHashMap.newKeySet();
 
-    private final Map<BlockPos, Deque<Long>> breakTimes = new ConcurrentHashMap<>();
     private final Map<BlockPos, Integer> breakCounts = new ConcurrentHashMap<>();
-    private static final long REBREAK_WINDOW_MS = 20 * 50;
-    private static final int REBREAK_THRESHOLD = 3;
     private static final int SAFE_REBREAK_THRESHOLD = 3;
 
     private final PlacementManager.PlacementListener airRefillListener = (pos, nowAir) -> {
@@ -105,17 +95,13 @@ public class SurroundModule extends Module {
             return;
         }
 
-        recordBreak(pos, System.currentTimeMillis());
-
-        if (fireworkPoses.contains(pos) && !keepReplacing.getValue()) return;
+        if (fireworkPoses.contains(pos)) return;
 
         if (speedMineClaims(pos)) return;
 
         if (cachedFireworkSlot >= 0 && canRocket(pos, System.currentTimeMillis())) {
-            if (!keepReplacing.getValue()) {
-                fireworkPoses.add(pos.immutable());
-                return;
-            }
+            fireworkPoses.add(pos.immutable());
+            return;
         }
 
         if (!wanted) return;
@@ -160,12 +146,10 @@ public class SurroundModule extends Module {
         opponentSurroundPoses.clear();
         helpBlockedPoses.clear();
         fireworkDeployedAt.clear();
-        breakTimes.clear();
         breakCounts.clear();
         cachedObsSlot = -1;
         cachedFireworkSlot = -1;
         renderMap.clear();
-        rocketRenderMap.clear();
         lastExtendOffset = null;
         lastExtendThreat = 0;
         lastCrystalNearHead  = 0;
@@ -193,6 +177,8 @@ public class SurroundModule extends Module {
         }
 
         List<BlockPos> placePoses = new ArrayList<>();
+        List<BlockPos> rebreakPlacePoses = new ArrayList<>();
+        List<BlockPos> rebreakSides = new ArrayList<>();
         List<BlockPos> fireworkPlacePoses = new ArrayList<>();
         List<BlockPos> feetPositions = new ArrayList<>();
         wantedPoses.clear();
@@ -229,6 +215,10 @@ public class SurroundModule extends Module {
                         placePoses.add(adjacent);
                     }
 
+                    if (isHot(adjacent, now)) {
+                        rebreakSides.add(adjacent.immutable());
+                    }
+
                     if (selfTrap.getValue() && selfTrapMode.getValue() != SelfTrapMode.None) {
                         checkSelfTrap(adjacent, now, placePoses);
                     }
@@ -259,6 +249,26 @@ public class SurroundModule extends Module {
             applyMineProtect(feetPositions, placePoses);
         }
 
+        if (fireworks.getValue()) {
+            for (BlockPos rebreak : rebreakSides) {
+                for (Direction dir : HORIZONTALS) {
+                    BlockPos neighbor = rebreak.relative(dir);
+
+                    if (neighbor.getY() == feetY
+                            && neighbor.getX() >= minX && neighbor.getX() <= maxX
+                            && neighbor.getZ() >= minZ && neighbor.getZ() <= maxZ) continue;
+                    if (wantedPoses.contains(neighbor)) continue;
+
+                    wantedPoses.add(neighbor.immutable());
+
+                    BlockState state = mc.level.getBlockState(neighbor);
+                    if (state.isAir() || state.canBeReplaced()) {
+                        rebreakPlacePoses.add(neighbor);
+                    }
+                }
+            }
+        }
+
         if (selfTrap.getValue() && selfTrapHead.getValue()) {
             boolean prone = crawlTrap.getValue()
                     && (mc.player.isVisuallyCrawling() || mc.player.isFallFlying());
@@ -280,7 +290,6 @@ public class SurroundModule extends Module {
         if (Homovore.placementManager.placeFireworksAlt(fireworkUsePoses, Direction.DOWN, cachedFireworkSlot)) {
             for (BlockPos pos : fireworkUsePoses) {
                 fireworkDeployedAt.put(pos.immutable(), now);
-                rocketRenderMap.put(pos.immutable(), now);
                 breakCounts.remove(pos);
             }
         }
@@ -290,6 +299,11 @@ public class SurroundModule extends Module {
 
         Vec3 predicted = mc.player.position().add(mc.player.getDeltaMovement().scale(0.5));
         placePoses.sort(Comparator.comparingDouble(p -> Vec3.atCenterOf(p).distanceToSqr(predicted)));
+
+        if (fireworks.getValue()) {
+            rebreakPlacePoses.sort(Comparator.comparingDouble(p -> Vec3.atCenterOf(p).distanceToSqr(predicted)));
+            placePoses.addAll(rebreakPlacePoses);
+        }
 
         if (attack.getValue() && now - lastAttackTime >= 50) {
             EndCrystal crystal = findThreateningCrystal();
@@ -323,16 +337,8 @@ public class SurroundModule extends Module {
 
         long fadeMs = (long) (fadeTime.getValue() * 1000);
         renderMap.entrySet().removeIf(e -> now - e.getValue() > fadeMs);
-        rocketRenderMap.entrySet().removeIf(e -> now - e.getValue() > fadeMs);
 
         fireworkDeployedAt.entrySet().removeIf(e -> now - e.getValue() > FIREWORK_REDEPLOY_COOLDOWN_MS);
-
-        breakTimes.entrySet().removeIf(e -> {
-            synchronized (e.getValue()) {
-                Long newest = e.getValue().peekLast();
-                return newest == null || now - newest > REBREAK_WINDOW_MS;
-            }
-        });
     }
 
     @Override
@@ -356,27 +362,11 @@ public class SurroundModule extends Module {
             RenderUtil.drawBox(event.getMatrix(), entry.getKey(),
                     withAlpha(oc, (int) (oc.getAlpha() * (1 - t))), 1.0f);
         }
-
-        for (Map.Entry<BlockPos, Long> entry : rocketRenderMap.entrySet()) {
-            long age = now - entry.getValue();
-            if (age > fadeMs) continue;
-
-            double t = age / fadeMs;
-
-            Color fc = rocketFillColor.getValue();
-            Color oc = rocketOutlineColor.getValue();
-
-            RenderUtil.drawBoxFilled(event.getMatrix(), entry.getKey(),
-                    withAlpha(fc, (int) (fc.getAlpha() * (1 - t))));
-            RenderUtil.drawBox(event.getMatrix(), entry.getKey(),
-                    withAlpha(oc, (int) (oc.getAlpha() * (1 - t))), 1.0f);
-        }
     }
 
     private boolean speedMineClaims(BlockPos pos) {
         SpeedMineModule mine = Homovore.moduleManager.getModuleByClass(SpeedMineModule.class);
-        if (mine == null || !mine.isEnabled() || !mine.alreadyBreaking(pos)) return false;
-        return !test.getValue();
+        return mine != null && mine.isEnabled() && mine.alreadyBreaking(pos);
     }
 
     private boolean intersectsCrystal(BlockPos pos) {
@@ -566,14 +556,6 @@ public class SurroundModule extends Module {
     }
 
     private void applyMineProtect(List<BlockPos> feetPositions, List<BlockPos> placePoses) {
-        if (test.getValue()) {
-            SpeedMineModule mine = Homovore.moduleManager.getModuleByClass(SpeedMineModule.class);
-            if (mine != null && mine.isEnabled()) {
-                applyMineProtectBlock(feetPositions, placePoses, mine.getRebreakBlockPos());
-                applyMineProtectBlock(feetPositions, placePoses, mine.getDelayedDestroyBlockPos());
-            }
-        }
-
         BreakIndicatorsModule indicators = Homovore.moduleManager.getModuleByClass(BreakIndicatorsModule.class);
         if (indicators == null || !indicators.isEnabled()) return;
 
@@ -720,17 +702,19 @@ public class SurroundModule extends Module {
     private boolean tryFirework(BlockPos pos, long now, List<BlockPos> out) {
         if (cachedFireworkSlot < 0) return false;
 
-        if (!canRocket(pos, now)) return false;
-        if (speedMineClaims(pos)) return false;
         if (hasLiveFireworkAt(pos)) {
-            if (!keepReplacing.getValue()) fireworkPoses.add(pos.immutable());
-            return !keepReplacing.getValue();
+            fireworkPoses.add(pos.immutable());
+            return true;
         }
         Long last = fireworkDeployedAt.get(pos);
         if (last != null && now - last < FIREWORK_REDEPLOY_COOLDOWN_MS) {
-            if (!keepReplacing.getValue()) fireworkPoses.add(pos.immutable());
-            return !keepReplacing.getValue();
+            fireworkPoses.add(pos.immutable());
+            return true;
         }
+
+        if (!canRocket(pos, now)) return false;
+        if (speedMineClaims(pos)) return false;
+
         fireworkPoses.add(pos.immutable());
         out.add(pos);
         return true;
@@ -767,28 +751,8 @@ public class SurroundModule extends Module {
         return false;
     }
 
-    private void recordBreak(BlockPos pos, long now) {
-        Deque<Long> times = breakTimes.computeIfAbsent(pos.immutable(), p -> new ArrayDeque<>());
-        synchronized (times) {
-            times.addLast(now);
-            while (!times.isEmpty() && now - times.peekFirst() > REBREAK_WINDOW_MS) {
-                times.pollFirst();
-            }
-        }
-    }
-
     private boolean isHot(BlockPos pos, long now) {
-        if (safeRocket.getValue()) return breakCounts.getOrDefault(pos, 0) >= SAFE_REBREAK_THRESHOLD;
-
-        Deque<Long> times = breakTimes.get(pos);
-        if (times == null) return false;
-        int count = 0;
-        synchronized (times) {
-            for (long t : times) {
-                if (now - t <= REBREAK_WINDOW_MS) count++;
-            }
-        }
-        return count >= REBREAK_THRESHOLD;
+        return breakCounts.getOrDefault(pos, 0) >= SAFE_REBREAK_THRESHOLD;
     }
 
     private boolean isFullBlock(BlockPos pos) {

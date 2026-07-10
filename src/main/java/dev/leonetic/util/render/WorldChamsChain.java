@@ -1,5 +1,6 @@
 package dev.leonetic.util.render;
 
+import dev.leonetic.Homovore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CachedOrthoProjectionMatrixBuffer;
 import net.minecraft.client.renderer.LevelTargetBundle;
@@ -8,10 +9,7 @@ import net.minecraft.client.renderer.PostChainConfig;
 import net.minecraft.client.renderer.UniformValue;
 import net.minecraft.resources.Identifier;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 public final class WorldChamsChain {
 
@@ -22,6 +20,7 @@ public final class WorldChamsChain {
     private static final Identifier CHAMS_H    = Identifier.fromNamespaceAndPath("homovore", "chams_h");
     private static final Identifier CHAMS_C    = Identifier.fromNamespaceAndPath("homovore", "chams_c");
     private static final Identifier CHAIN_NAME = Identifier.fromNamespaceAndPath("homovore", "chams_default_runtime");
+    private static final UniformWriter UNIFORM_WRITER = new UniformWriter();
 
     private static final int LINE_WIDTH = 2;
 
@@ -38,6 +37,30 @@ public final class WorldChamsChain {
                                 float fillTint, float fillAlpha) {
         if (cached != null && glowRadius == lastGlowRadius && glowIntensity == lastGlowIntensity
                 && fillTint == lastFillTint && fillAlpha == lastFillAlpha) {
+            return cached;
+        }
+        else if (cached != null)
+        {
+            lastGlowRadius = glowRadius;
+            lastGlowIntensity = glowIntensity;
+            lastFillTint = fillTint;
+            lastFillAlpha = fillAlpha;
+
+            Map<String, List<UniformValue>> configs = new HashMap<>();
+            List<UniformValue> dilateUniforms = List.of(integer(LINE_WIDTH), integer(glowRadius));
+            List<UniformValue> colorUniforms = List.of(integer(LINE_WIDTH), integer(glowRadius));
+            List<UniformValue> chamsUniforms = List.of(
+                    flt(glowIntensity),
+                    flt(fillTint),
+                    flt(fillAlpha),
+                    integer(glowRadius),
+                    integer(LINE_WIDTH)
+            );
+
+            configs.put("DilateConfig", dilateUniforms);
+            configs.put("ColorConfig", colorUniforms);
+            configs.put("ChamsConfig", chamsUniforms);
+            UNIFORM_WRITER.setUniforms(cached, configs);
             return cached;
         }
 

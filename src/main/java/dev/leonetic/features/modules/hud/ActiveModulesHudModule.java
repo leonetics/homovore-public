@@ -8,6 +8,7 @@ import dev.leonetic.event.impl.render.Render2DEvent;
 import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.modules.client.HudClientModule;
 import dev.leonetic.features.modules.client.HudModule;
+import dev.leonetic.features.modules.client.HudPosition;
 import dev.leonetic.features.settings.Bind;
 import dev.leonetic.util.traits.Jsonable;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,16 +18,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 public class ActiveModulesHudModule extends HudModule implements Jsonable {
-    private static final int RIGHT_MARGIN = 2;
-    private static final int BOTTOM_MARGIN = 2;
 
-    private static final int BOTTOM_RIGHT_GAP = 2;
+    private static final int STACK_GAP = 2;
     private static final int GRAY = 0xFFAAAAAA;
-
-    public enum SnapTo {
-        DEFAULT,
-        BOTTOMRIGHT
-    }
 
     private static ActiveModulesHudModule INSTANCE;
 
@@ -72,8 +66,10 @@ public class ActiveModulesHudModule extends HudModule implements Jsonable {
                 ? hudClient.activeModuleColor.getValue().getRGB()
                 : Homovore.colorManager.getAsIntFullAlpha("chat");
 
-        SnapTo snap = hudClient != null ? hudClient.activeModulesSnap.getValue() : SnapTo.DEFAULT;
-        int y = snap == SnapTo.BOTTOMRIGHT ? bottomRightTop(hudClient) : screenHeight() / 2;
+        HudPosition pos = hudClient != null ? hudClient.positionOf(this) : HudPosition.CENTER_RIGHT;
+        int linesBelow = hudClient != null ? hudClient.linesBelow(this) : 0;
+        int gap = pos.isBottom() && linesBelow > 0 ? STACK_GAP : 0;
+        int y = blockTop(pos, entries.size(), linesBelow, gap);
 
         for (String name : entries) {
             Module module = Homovore.moduleManager.getModuleByName(name);
@@ -86,8 +82,7 @@ public class ActiveModulesHudModule extends HudModule implements Jsonable {
             String suffix = bind != null ? " [" + bind.toString() + "]" : "";
 
             int width = mc.font.width(display) + mc.font.width(meta) + mc.font.width(suffix);
-            int x = screenWidth() - RIGHT_MARGIN - width;
-            mark(x, y, width, mc.font.lineHeight);
+            int x = lineX(pos, width);
 
             int nameColor = module.isEnabled() ? activeColor : GRAY;
             ctx.drawString(mc.font, display, x, y, nameColor);
@@ -102,23 +97,6 @@ public class ActiveModulesHudModule extends HudModule implements Jsonable {
 
             y += mc.font.lineHeight;
         }
-    }
-
-    private int bottomRightTop(HudClientModule hudClient) {
-        int linesBelow = 0;
-        if (hudClient != null) {
-            if (hudClient.isElementEnabled(CoordinatesHudModule.class)
-                    && !hudClient.coordinatesLeft.getValue()) linesBelow++;
-            if (hudClient.isElementEnabled(PingHudModule.class)) linesBelow++;
-
-            if (hudClient.isElementEnabled(RadarHudModule.class)) {
-                RadarHudModule radar = hudClient.getElement(RadarHudModule.class);
-                if (radar != null) linesBelow += radar.renderedLineCount();
-            }
-        }
-        int blockBottom = bottomAnchor() - BOTTOM_MARGIN - linesBelow * mc.font.lineHeight;
-        if (linesBelow > 0) blockBottom -= BOTTOM_RIGHT_GAP;
-        return blockBottom - entries.size() * mc.font.lineHeight;
     }
 
     @Override

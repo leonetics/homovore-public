@@ -1,5 +1,6 @@
 package dev.leonetic.util.render;
 
+import dev.leonetic.Homovore;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CachedOrthoProjectionMatrixBuffer;
 import net.minecraft.client.renderer.LevelTargetBundle;
@@ -8,6 +9,7 @@ import net.minecraft.client.renderer.PostChainConfig;
 import net.minecraft.client.renderer.UniformValue;
 import net.minecraft.resources.Identifier;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +24,7 @@ public final class HandShaderChain {
     private static final Identifier DILATED           = Identifier.fromNamespaceAndPath("homovore", "hand_dilated");
     private static final Identifier GLOW_H            = Identifier.fromNamespaceAndPath("homovore", "hand_glow_h");
     private static final Identifier CHAIN_NAME        = Identifier.fromNamespaceAndPath("homovore", "hand_shader_runtime");
+    private static final UniformWriter UNIFORM_WRITER = new UniformWriter();
 
     private static final float FILL_ALPHA = 0.35f;
 
@@ -42,6 +45,39 @@ public final class HandShaderChain {
 
         if (cached != null && lineWidth == lastLineWidth && fill == lastFill
                 && glowR == lastGlowRadius && glowIntensity == lastGlowIntensity) {
+            return cached;
+        }
+        else if (cached != null && lastGlowRadius == glowR) // if glow was just toggled we need to recreate the postchain.
+        {
+            lastLineWidth = lineWidth;
+            lastFill = fill;
+            lastGlowRadius = glowR;
+            lastGlowIntensity = glowIntensity;
+
+            float fillA = fill ? FILL_ALPHA : 0.0f;
+
+            Map<String, List<UniformValue>> configs = new HashMap<>();
+            List<UniformValue> dilateConfig = List.of(integer(lineWidth));
+            List<UniformValue> outlineConfig;
+            List<UniformValue> glowConfig = List.of(integer(glowRadius));
+            if (glowRadius > 0)
+            {
+                outlineConfig = List.of(
+                        flt(fillA),
+                        flt(1.0f),
+                        flt(glowIntensity),
+                        integer(lineWidth),
+                        integer(glowRadius));
+            }
+            else
+            {
+                outlineConfig = List.of(flt(fillA), flt(1.0f), integer(lineWidth));
+            }
+
+            configs.put("DilateConfig", dilateConfig);
+            configs.put("OutlineConfig", outlineConfig);
+            configs.put("GlowConfig", glowConfig);
+            UNIFORM_WRITER.setUniforms(cached, configs);
             return cached;
         }
 

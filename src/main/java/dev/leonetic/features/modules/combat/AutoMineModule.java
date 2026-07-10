@@ -9,6 +9,7 @@ import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.modules.client.TargetsModule;
 import dev.leonetic.features.modules.world.SpeedMineModule;
 import dev.leonetic.features.settings.Setting;
+import dev.leonetic.util.InteractionUtil;
 import dev.leonetic.util.MathUtil;
 import dev.leonetic.util.PlaceUtil;
 import dev.leonetic.util.inventory.InventoryUtil;
@@ -29,6 +30,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
 
 import java.awt.Color;
 import java.util.EnumSet;
@@ -49,6 +51,7 @@ public class AutoMineModule extends Module {
     private final Setting<Boolean> ignoreNakeds = bool("IgnoreNakeds", true);
     private final Setting<ExtendBreakMode> extendBreakMode = mode("Extend", ExtendBreakMode.Long);
     private final Setting<Boolean> underMine = bool("UnderMine", true);
+    private final Setting<Boolean> crawlMine = bool("CrawlMine", false);
     private final Setting<AntiSwimMode> antiSwim = mode("AntiSwim", AntiSwimMode.None);
     private final Setting<AntiSurroundMode> antiSurroundMode = mode("AntiSurround", AntiSurroundMode.Auto);
     private final Setting<Boolean> antiSurroundInnerSnap = bool("InnerSnap", true);
@@ -200,6 +203,8 @@ public class AutoMineModule extends Module {
         SpeedMineModule mine = speedMine();
         if (mine == null) return;
 
+        if (tryCrawlMine(mine)) return;
+
         BlockState selfFeetBlock = mc.level.getBlockState(mc.player.blockPosition());
         BlockState selfHeadBlock = mc.level.getBlockState(mc.player.blockPosition().above());
         BlockPos selfHeadPos = mc.player.blockPosition().above();
@@ -260,6 +265,25 @@ public class AutoMineModule extends Module {
         if (!targetBlocks.isEmpty()) {
             mine.silentBreakBlock(targetBlocks.remove(), 10);
         }
+    }
+
+    private boolean tryCrawlMine(SpeedMineModule mine) {
+        if (!crawlMine.getValue()) return false;
+        if (mc.player.isCrouching()) return false;
+
+        BlockPos feetPos = mc.player.blockPosition();
+        BlockPos headPos = feetPos.above();
+        BlockState feetBlock = mc.level.getBlockState(feetPos);
+        BlockState headBlock = mc.level.getBlockState(headPos);
+
+        if (!isBlocked(feetPos, feetBlock) || !isBlocked(headPos, headBlock)) return false;
+        if (!InteractionUtil.canBreak(feetPos, feetBlock)) return false;
+
+        return mine.silentBreakBlock(feetPos, 200);
+    }
+
+    private boolean isBlocked(BlockPos pos, BlockState state) {
+        return !state.canBeReplaced() && state.getShape(mc.level, pos) != Shapes.empty();
     }
 
     private Player selectTarget() {

@@ -31,8 +31,6 @@ public class ElytraAssistModule extends Module {
 
     private final Setting<Double> climbBias = num("ClimbBias", 3.0, 0.0, 20.0);
 
-    private final Setting<Boolean> debug = bool("Debug", false);
-
     private static final int RELEASE_HYST = 6;
 
     private static final int COMMIT_TICKS = 3;
@@ -65,8 +63,6 @@ public class ElytraAssistModule extends Module {
     private boolean steering;
     private int clearTicks;
     private float lastYaw, lastPitch;
-
-    private String lastLog;
 
     private List<double[]> offsets;
 
@@ -107,15 +103,12 @@ public class ElytraAssistModule extends Module {
                 resubmit();
                 return;
             }
-            if (steering) logAction("CLEAR", "✓ aim clear (survives %d/%dt) — released control", aimSurvival, ticks);
             stop();
             return;
         }
         clearTicks = 0;
 
         if (steering && simulateSurvival(lastYaw, lastPitch, detect, startVel, gravity, ticks) >= releaseWithin) {
-            logAction("HOLD", "⟳ holding line yaw%+.0f pitch%+.0f — still clear near-term",
-                    Mth.wrapDegrees(lastYaw - lookYaw), lastPitch - lookPitch);
             resubmit();
             return;
         }
@@ -131,8 +124,6 @@ public class ElytraAssistModule extends Module {
         int bestTier = Integer.MAX_VALUE;
         double bestScore = Double.NEGATIVE_INFINITY;
         float bestYaw = lookYaw, bestPitch = lookPitch;
-        int bestSurv = 0;
-        boolean bestDescends = false;
 
         for (double[] off : offsets()) {
             if (Math.abs(off[0]) > yawCap) continue;
@@ -157,13 +148,9 @@ public class ElytraAssistModule extends Module {
                 bestScore = score;
                 bestYaw = yaw;
                 bestPitch = pitch;
-                bestSurv = surv;
-                bestDescends = descends;
             }
         }
 
-        logChoice(lookYaw, lookPitch, bestYaw, bestPitch, bestTier, bestSurv, bestDescends,
-                detect, startVel, gravity, ticks);
         return new float[]{bestYaw, bestPitch};
     }
 
@@ -194,29 +181,7 @@ public class ElytraAssistModule extends Module {
         if (steering) {
             Homovore.rotationManager.cancel(ID);
             steering = false;
-            lastLog = null;
         }
-    }
-
-    private void logAction(String key, String fmt, Object... args) {
-        if (!debug.getValue() || key.equals(lastLog)) return;
-        lastLog = key;
-        Homovore.LOGGER.info("[ElytraAssist] " + String.format(fmt, args));
-    }
-
-    private void logChoice(float lookYaw, float lookPitch, float yaw, float pitch, int tier, int surv,
-                           boolean descends, AABB detect, Vec3 startVel, double gravity, int ticks) {
-        if (!debug.getValue()) return;
-        int hit = simulateSurvival(lookYaw, lookPitch, detect, startVel, gravity, ticks);
-        double dist = hit * startVel.length();
-        double dy = Mth.wrapDegrees(yaw - lookYaw), dp = pitch - lookPitch;
-        String label = switch (tier) {
-            case 0 -> descends ? "THREAD-DIVE" : "THREAD";
-            case 1 -> "BRACE-CLIMB";
-            default -> "BRACE-DIVE";
-        };
-        logAction(label, "%s: obstacle in %dt (~%.0fb) — steer yaw%+.0f pitch%+.0f (%s, survives %d/%dt)",
-                label, hit, dist, dy, dp, descends ? "descending" : "level/climb", surv, ticks);
     }
 
     private double[] simulate(float yaw, float pitch, AABB box, Vec3 startVel, double gravity, int horizon) {

@@ -44,6 +44,8 @@ public class CommandManager extends Feature implements Jsonable {
         register(new SaveKitCommand());
         register(new LoadKitCommand());
         register(new FakePlayerCommand());
+        register(new DebugLimitsCommand());
+        dev.leonetic.features.debug.MoveLimitDebug.get();
 
         LOGGER.info("Registered {} commands", commandList.size());
         Homovore.configManager.addConfig(this);

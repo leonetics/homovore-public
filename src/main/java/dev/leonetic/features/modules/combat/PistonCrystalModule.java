@@ -47,13 +47,13 @@ public class PistonCrystalModule extends Module {
 
     private static final double NUDGE = 1.0 / 16.0;
 
+    private static final double PLACE_RANGE = 6.0;
+    private static final double BREAK_RANGE = 3.0;
+
     private final Setting<Double>  minDamage    = num("MinDamage",    6.0, 0.0, 36.0).setPage("General");
     private final Setting<Integer> delay        = num("Delay",       10, 0, 20).setPage("General");
-    private final Setting<Boolean> rotate       = bool("Rotate",     true).setPage("General");
     private final Setting<Boolean> offhandPlace = bool("OffhandPlace", true).setPage("General");
     private final Setting<Boolean> autoBase     = bool("AutoBase",   true).setPage("General");
-    private final Setting<Double>  placeRange   = num("PlaceRange",  4.5, 1.0, 6.0).setPage("General");
-    private final Setting<Double>  breakRange   = num("BreakRange",  3.0, 1.0, 6.0).setPage("General");
 
     private final Setting<Boolean> render      = bool("Render",      true).setPage("Render");
     private final Setting<Float>   fadeTime    = num("FadeTime",     0.2f, 0.05f, 2.0f).setPage("Render");
@@ -68,6 +68,9 @@ public class PistonCrystalModule extends Module {
     private int     rotateHeld;
     private int     waitTicks;
     private float   lastDamage;
+
+    private ArmorProfile                     targetProfile;
+    private net.minecraft.world.Difficulty   targetDifficulty;
 
     public PistonCrystalModule() {
         super("PistonCrystal",
@@ -135,17 +138,15 @@ public class PistonCrystalModule extends Module {
 
         if (breakCrystalsAround(setup.head())) return;
 
-        if (rotate.getValue()) {
-            if (pending == null || pending.dir() != setup.dir()) rotateHeld = 0;
-            pending = setup;
-            Homovore.rotationManager.submit(new RotationRequest(
-                    ROTATION_ID, ROTATION_PRIORITY,
-                    setup.dir().toYRot(), 0f,
-                    RotationRequest.Mode.MOTION, true, false));
-            if (Homovore.rotationManager.isCompleted(ROTATION_ID)) rotateHeld++;
-            else rotateHeld = 0;
-            if (rotateHeld < 2) return;
-        }
+        if (pending == null || pending.dir() != setup.dir()) rotateHeld = 0;
+        pending = setup;
+        Homovore.rotationManager.submit(new RotationRequest(
+                ROTATION_ID, ROTATION_PRIORITY,
+                setup.dir().toYRot(), 0f,
+                RotationRequest.Mode.MOTION, true, false));
+        if (Homovore.rotationManager.isCompleted(ROTATION_ID)) rotateHeld++;
+        else rotateHeld = 0;
+        if (rotateHeld < 2) return;
 
         place(setup, pistonSlot, redstoneSlot, crystalSlot);
     }
@@ -219,7 +220,7 @@ public class PistonCrystalModule extends Module {
 
     private boolean breakCrystalsAround(BlockPos head) {
         Vec3 eye       = mc.player.getEyePosition();
-        double rangeSq = breakRange.getValue() * breakRange.getValue();
+        double rangeSq = BREAK_RANGE * BREAK_RANGE;
         AABB area      = new AABB(head).inflate(1.0);
         boolean found  = false;
         for (var e : mc.level.getEntities(null, area)) {
@@ -246,7 +247,7 @@ public class PistonCrystalModule extends Module {
         Vec3 eye = mc.player.getEyePosition(1.0f);
         if (bb.contains(eye)) return true;
         Vec3 look     = getLookVector(yaw, pitch);
-        Vec3 reachEnd = eye.add(look.scale(breakRange.getValue()));
+        Vec3 reachEnd = eye.add(look.scale(BREAK_RANGE));
         return bb.clip(eye, reachEnd).isPresent();
     }
 
@@ -254,8 +255,11 @@ public class PistonCrystalModule extends Module {
         LivingEntity target = findTarget();
         if (target == null) { lastDamage = 0; return null; }
 
+        targetProfile    = profileOf(target);
+        targetDifficulty = mc.level.getDifficulty();
+
         Vec3  eye   = mc.player.getEyePosition();
-        double range = placeRange.getValue();
+        double range = PLACE_RANGE;
 
         AABB bb = target.getBoundingBox();
         int minX = Mth.floor(bb.minX), maxX = Mth.floor(bb.maxX - 1e-7);
@@ -353,14 +357,14 @@ public class PistonCrystalModule extends Module {
         AABB crystalBox = new AABB(
                 explosionPos.x - 1, explosionPos.y,     explosionPos.z - 1,
                 explosionPos.x + 1, explosionPos.y + 2, explosionPos.z + 1);
-        double breakRangeSq = breakRange.getValue() * breakRange.getValue();
+        double breakRangeSq = BREAK_RANGE * BREAK_RANGE;
         if (distSqToBox(eye, crystalBox) > breakRangeSq) return null;
-
-        RedstoneSpot redstone = findRedstoneSpot(pistonPos, dir, explosionPos, eye, rangeSq);
-        if (redstone == null) return null;
 
         float damage = calcDamage(target, explosionPos, placeBase ? base : null);
         if (damage < minDamage.getValue()) return null;
+
+        RedstoneSpot redstone = findRedstoneSpot(pistonPos, dir, explosionPos, eye, rangeSq);
+        if (redstone == null) return null;
 
         return new Setup(dir, pistonPos, redstone.pos(), crystalPos, base, head,
                          redstone.place(), placeBase, damage);
@@ -390,16 +394,24 @@ public class PistonCrystalModule extends Module {
         return fallback == null ? null : new RedstoneSpot(fallback, true);
     }
 
+    private final BlockPos.MutableBlockPos rayCursor = new BlockPos.MutableBlockPos();
+
     private boolean redstoneSafe(BlockPos pos, Vec3 explosionPos) {
         Vec3 to = Vec3.atCenterOf(pos);
         if (explosionPos.distanceToSqr(to) > 36.0) return true;
         Vec3 diff  = to.subtract(explosionPos);
         int  steps = (int) Math.ceil(diff.length() / 0.25);
+        long last  = Long.MIN_VALUE;
         for (int i = 1; i < steps; i++) {
-            Vec3     point  = explosionPos.add(diff.scale((double) i / steps));
-            BlockPos cursor = BlockPos.containing(point);
-            if (cursor.equals(pos)) break;
-            if (mc.level.getBlockState(cursor).getBlock().getExplosionResistance() >= 600.0f)
+            double s = (double) i / steps;
+            rayCursor.set(Mth.floor(explosionPos.x + diff.x * s),
+                          Mth.floor(explosionPos.y + diff.y * s),
+                          Mth.floor(explosionPos.z + diff.z * s));
+            long key = rayCursor.asLong();
+            if (key == last) continue;
+            last = key;
+            if (rayCursor.equals(pos)) break;
+            if (mc.level.getBlockState(rayCursor).getBlock().getExplosionResistance() >= 600.0f)
                 return true;
         }
         return false;
@@ -431,11 +443,17 @@ public class PistonCrystalModule extends Module {
     private boolean explosionBlocked(Vec3 from, Vec3 to, BlockPos phantomBase) {
         Vec3 diff  = to.subtract(from);
         int  steps = (int) Math.ceil(diff.length() / 0.25);
+        long last  = Long.MIN_VALUE;
         for (int i = 1; i < steps; i++) {
-            Vec3     point  = from.add(diff.scale((double) i / steps));
-            BlockPos cursor = BlockPos.containing(point);
-            if (phantomBase != null && cursor.equals(phantomBase)) return true;
-            if (mc.level.getBlockState(cursor).getBlock().getExplosionResistance() >= 600.0f) return true;
+            double s = (double) i / steps;
+            rayCursor.set(Mth.floor(from.x + diff.x * s),
+                          Mth.floor(from.y + diff.y * s),
+                          Mth.floor(from.z + diff.z * s));
+            long key = rayCursor.asLong();
+            if (key == last) continue;
+            last = key;
+            if (phantomBase != null && rayCursor.equals(phantomBase)) return true;
+            if (mc.level.getBlockState(rayCursor).getBlock().getExplosionResistance() >= 600.0f) return true;
         }
         return false;
     }
@@ -480,37 +498,46 @@ public class PistonCrystalModule extends Module {
     }
 
     private float calcDamage(LivingEntity target, Vec3 explosionPos, BlockPos phantomBase) {
-        double dist   = target.position().distanceTo(explosionPos);
-        if (dist > 12.0) return 0;
+
+        double distSq = target.position().distanceToSqr(explosionPos);
+        if (distSq > 144.0) return 0;
         double exposure = calcExposure(explosionPos, target.getBoundingBox(), phantomBase);
         if (exposure <= 0) return 0;
-        double impact = (1.0 - dist / 12.0) * exposure;
+        double impact = (1.0 - Math.sqrt(distSq) / 12.0) * exposure;
         if (impact <= 0) return 0;
 
         float damage = (float)((impact * impact + impact) / 2.0 * 7.0 * 12.0 + 1.0);
-        switch (mc.level.getDifficulty()) {
+        switch (targetDifficulty) {
             case EASY -> damage = Math.min(damage / 2f + 1f, damage);
             case HARD -> damage *= 1.5f;
             default   -> {}
         }
 
-        float armor    = (float) target.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR);
-        float tough    = (float) target.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR_TOUGHNESS);
-        float i        = 2.0f + tough / 4.0f;
-        float j        = Mth.clamp(armor - damage / i, armor * 0.2f, 20.0f);
-        damage        *= 1.0f - j / 25.0f;
+        ArmorProfile p = targetProfile;
+        float i = 2.0f + p.toughness() / 4.0f;
+        float j = Mth.clamp(p.armor() - damage / i, p.armor() * 0.2f, 20.0f);
+        damage *= 1.0f - j / 25.0f;
+        damage *= p.resistanceMul();
+        damage = CombatRules.getDamageAfterMagicAbsorb(damage, p.protPoints());
 
+        return Math.max(damage, 0f);
+    }
+
+    private ArmorProfile profileOf(LivingEntity target) {
+        float armor = (float) target.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR);
+        float tough = (float) target.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR_TOUGHNESS);
+
+        float resistanceMul = 1.0f;
         MobEffectInstance res = target.getEffect(MobEffects.RESISTANCE);
-        if (res != null) damage *= 1.0f - 0.2f * (res.getAmplifier() + 1);
+        if (res != null) resistanceMul = 1.0f - 0.2f * (res.getAmplifier() + 1);
 
         int protPoints = 0;
         if (!target.getItemBySlot(EquipmentSlot.HEAD).isEmpty())  protPoints += 4;
         if (!target.getItemBySlot(EquipmentSlot.CHEST).isEmpty()) protPoints += 4;
         if (!target.getItemBySlot(EquipmentSlot.LEGS).isEmpty())  protPoints += 8;
         if (!target.getItemBySlot(EquipmentSlot.FEET).isEmpty())  protPoints += 4;
-        damage = CombatRules.getDamageAfterMagicAbsorb(damage, protPoints);
 
-        return Math.max(damage, 0f);
+        return new ArmorProfile(armor, tough, resistanceMul, protPoints);
     }
 
     private Vec3 closestPointOnBox(Vec3 eye, AABB box) {
@@ -589,4 +616,6 @@ public class PistonCrystalModule extends Module {
                          boolean placeRedstone, boolean placeBase, float damage) {}
 
     private record RedstoneSpot(BlockPos pos, boolean place) {}
+
+    private record ArmorProfile(float armor, float toughness, float resistanceMul, int protPoints) {}
 }

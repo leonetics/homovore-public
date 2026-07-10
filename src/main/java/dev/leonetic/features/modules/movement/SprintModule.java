@@ -28,7 +28,7 @@ public class SprintModule extends Module {
         if (!isEnabled() || nullCheck()) return false;
         if (mc.player.isUsingItem()) return false;
 
-        if (mode.getValue() == Mode.OMNI) {
+        if (mode.getValue() == Mode.OMNI && !mc.player.isFallFlying()) {
             return mc.options.keyUp.isDown() || mc.options.keyDown.isDown()
                     || mc.options.keyLeft.isDown() || mc.options.keyRight.isDown();
         }
@@ -39,10 +39,12 @@ public class SprintModule extends Module {
     private void onTick(TickEvent event) {
         if (nullCheck()) return;
 
-        if (mode.getValue() == Mode.OMNI) {
+        if (mode.getValue() == Mode.OMNI && !mc.player.isFallFlying()) {
             omni();
             return;
         }
+
+        Homovore.rotationManager.cancel(ROTATION_ID);
 
         if (mc.player.input.getMoveVector().y > 0) {
             mc.player.setSprinting(true);
