@@ -24,30 +24,23 @@ import static dev.leonetic.util.inventory.InventoryUtil.FULL_SCOPE;
 public class AutoXPModule extends Module {
 
     private final Setting<Bind> throwBind = key("Throw", Bind.none());
-    private final Setting<Mode> mode = mode("Mode", Mode.STREAM);
     private final Setting<Boolean> pauseInAir = bool("PauseInAir", true);
     private final Setting<Boolean> autoRepair = bool("AutoRepair", true);
-    private final Setting<Integer> minThreshold = num("MinThreshold", 30, 1, 100);
-    private final Setting<Integer> maxThreshold = num("MaxThreshold", 80, 1, 100);
 
     private static final int THROWS_PER_BATCH = 6;
     private static final long BATCH_INTERVAL_MS = 300;
 
     private boolean throwing;
-    private boolean repairing;
     private boolean keyWasDown;
     private long lastThrowMs;
 
     public AutoXPModule() {
         super("AutoXP", "Throws XP bottles to mend your armor and tools.", Category.PLAYER);
-        minThreshold.setVisibility(v -> autoRepair.getValue());
-        maxThreshold.setVisibility(v -> autoRepair.getValue());
     }
 
     @Override
     public void onDisable() {
         throwing = false;
-        repairing = false;
         keyWasDown = false;
         lastThrowMs = 0;
     }
@@ -72,18 +65,11 @@ public class AutoXPModule extends Module {
             return;
         }
 
-        if (!autoRepair.getValue()) {
-            repairing = false;
-            return;
-        }
-
-        if (anyMendingAtOrBelow(minThreshold.getValue())) repairing = true;
-        else if (repairing && allMendingAbove(maxThreshold.getValue())) repairing = false;
-
-        if (!repairing) return;
+        if (!autoRepair.getValue()) return;
+        if (xpNeeded() <= 0) return;
         if (isPaused()) return;
         if (!shouldThrowNow()) return;
-        throwBottles(throwAmount());
+        throwBottles(THROWS_PER_BATCH);
     }
 
     private boolean isPaused() {
@@ -120,7 +106,7 @@ public class AutoXPModule extends Module {
             return;
         }
         if (!shouldThrowNow()) return;
-        throwBottles(throwAmount());
+        throwBottles(THROWS_PER_BATCH);
     }
 
     private void throwBottles(int amount) {
@@ -141,15 +127,10 @@ public class AutoXPModule extends Module {
     }
 
     private boolean shouldThrowNow() {
-        if (mode.getValue() == Mode.STREAM) return true;
         long now = System.currentTimeMillis();
         if (now - lastThrowMs < BATCH_INTERVAL_MS) return false;
         lastThrowMs = now;
         return true;
-    }
-
-    private int throwAmount() {
-        return mode.getValue() == Mode.STREAM ? 1 : THROWS_PER_BATCH;
     }
 
     private int xpNeeded() {
@@ -162,20 +143,6 @@ public class AutoXPModule extends Module {
         if (!isMendable(stack)) return 0;
         int damage = stack.getDamageValue();
         return damage <= 0 ? 0 : (int) Math.ceil(damage / 2.0);
-    }
-
-    private boolean anyMendingAtOrBelow(int pct) {
-        for (ItemStack stack : gear()) {
-            if (isMendable(stack) && durabilityPct(stack) <= pct) return true;
-        }
-        return false;
-    }
-
-    private boolean allMendingAbove(int pct) {
-        for (ItemStack stack : gear()) {
-            if (isMendable(stack) && durabilityPct(stack) <= pct) return false;
-        }
-        return true;
     }
 
     private ItemStack[] gear() {
@@ -191,14 +158,5 @@ public class AutoXPModule extends Module {
 
     private boolean isMendable(ItemStack stack) {
         return !stack.isEmpty() && stack.getMaxDamage() > 0 && EnchantmentUtil.has(Enchantments.MENDING, stack);
-    }
-
-    private float durabilityPct(ItemStack stack) {
-        return (float) (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage() * 100f;
-    }
-
-    public enum Mode {
-        GROUP,
-        STREAM
     }
 }

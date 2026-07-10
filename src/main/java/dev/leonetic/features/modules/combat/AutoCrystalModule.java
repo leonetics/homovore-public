@@ -149,6 +149,7 @@ public class AutoCrystalModule extends Module {
     private double lastCalcMs = 0;
 
     private int lastReactorPlaceTick = -1;
+    private BlockPos lastPlaceAir = null;
 
     private final ExposureContext exposureCtx = new ExposureContext();
 
@@ -205,6 +206,7 @@ public class AutoCrystalModule extends Module {
         crystalPlaces.clear();
         deadIds.clear();
         lastBestDamage = 0;
+        lastPlaceAir = null;
         resetDiag();
         renderPos = null;
         smoothBox = null;
@@ -806,11 +808,29 @@ public class AutoCrystalModule extends Module {
 
         candidates.sort((a, b) -> Float.compare(b.bound, a.bound));
 
+        BlockPos locked = null;
+        if (lastPlaceAir != null) {
+            long lockTs = crystalPlaces.get(lastPlaceAir.asLong());
+            boolean pending = lockTs != 0L && now - lockTs < PLACE_PENDING_MS;
+            if (pending || hasLiveCrystalAt(lastPlaceAir)) {
+                double cx = lastPlaceAir.getX() + 0.5, cy = lastPlaceAir.getY(), cz = lastPlaceAir.getZ() + 0.5;
+                Vec3 lockEye = bestReachEye(new AABB(cx - 1, cy, cz - 1, cx + 1, cy + 2, cz + 1));
+                if (sqDistToBox(lockEye, cx - 1, cy, cz - 1, cx + 1, cy + 2, cz + 1) <= breakRangeSq) {
+                    locked = lastPlaceAir;
+                } else {
+                    lastPlaceAir = null;
+                }
+            } else {
+                lastPlaceAir = null;
+            }
+        }
+
         PlaceTarget best = null;
         for (int i = 0, n = candidates.size(); i < n; i++) {
             PlaceCandidate c = candidates.get(i);
             if (best != null && c.bound <= best.damage) break;
 
+            if (locked != null && !c.airPos.equals(locked)) continue;
             if (isBlocked(c.airPos)) continue;
             long pendingTs = crystalPlaces.get(c.airPos.asLong());
             if (pendingTs != 0L && now - pendingTs < PLACE_PENDING_MS) continue;
@@ -1107,8 +1127,7 @@ public class AutoCrystalModule extends Module {
             boolean sentOffhand = Homovore.placementManager.placeCrystalOffhand(base, slot, trustBase);
             if (sentOffhand) {
                 diagPlaceSent++;
-                crystalPlaces.put(base.above().asLong(), System.currentTimeMillis());
-                markRender(base.above());
+                recordPlace(base.above());
             }
             return;
         }
@@ -1117,8 +1136,7 @@ public class AutoCrystalModule extends Module {
             diagPlaceAttempt++;
             if (Homovore.placementManager.placeCrystal(base, slot, trustBase)) {
                 diagPlaceSent++;
-                crystalPlaces.put(base.above().asLong(), System.currentTimeMillis());
-                markRender(base.above());
+                recordPlace(base.above());
             }
             return;
         }
@@ -1144,13 +1162,25 @@ public class AutoCrystalModule extends Module {
 
         if (sent) {
             diagPlaceSent++;
-            crystalPlaces.put(base.above().asLong(), System.currentTimeMillis());
-            markRender(base.above());
+            recordPlace(base.above());
             if (handle != null) pendingSwapHandle = handle;
         } else if (acquiredNow) {
 
             Homovore.swapManager.release(handle);
         }
+    }
+
+    private void recordPlace(BlockPos airPos) {
+        crystalPlaces.put(airPos.asLong(), System.currentTimeMillis());
+        markRender(airPos);
+        lastPlaceAir = airPos;
+    }
+
+    private boolean hasLiveCrystalAt(BlockPos airPos) {
+        for (Entity e : mc.level.getEntities(null, new AABB(airPos))) {
+            if (e instanceof EndCrystal && e.blockPosition().equals(airPos)) return true;
+        }
+        return false;
     }
 
     public boolean preplaceCrystal(BlockPos airPos, boolean snap) {
