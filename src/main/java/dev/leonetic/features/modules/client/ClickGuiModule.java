@@ -1,6 +1,5 @@
 package dev.leonetic.features.modules.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.ClientEvent;
 import dev.leonetic.event.system.Subscribe;
@@ -9,10 +8,6 @@ import dev.leonetic.features.gui.HomovoreGui;
 import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.settings.Bind;
 import dev.leonetic.features.settings.Setting;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.KeyMapping;
-import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
@@ -20,27 +15,17 @@ import java.awt.*;
 public class ClickGuiModule extends Module {
     private static ClickGuiModule INSTANCE;
 
-    private static final KeyMapping.Category CATEGORY =
-            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("homovore", "homovore"));
-
-    public static final KeyMapping OPEN_GUI_KEY = new KeyMapping(
-            "key.homovore.open_gui",
-            InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_RIGHT_SHIFT,
-            CATEGORY
-    );
-
-    public Setting<String> prefix = str("Prefix", ".");
-    public Setting<Theme> theme = mode("Theme", Theme.HOMOVORE);
-    public Setting<Color> customColor = color("Custom Color", 120, 170, 210, 220);
-    public Setting<Boolean> smooth = bool("Smooth", true);
-    public Setting<Integer> rainbowHue = num("Delay", 240, 0, 600);
-    public Setting<Float> rainbowBrightness = num("Brightness", 200.0f, 1.0f, 255.0f);
-    public Setting<Float> rainbowSaturation = num("Saturation", 140.0f, 1.0f, 255.0f);
+    public Setting<String>  prefix           = str("Prefix", ".");
+    public Setting<Theme>   theme            = mode("Theme", Theme.HOMOVORE);
+    public Setting<Color>   customColor      = color("Custom Color", 120, 170, 210, 220);
+    public Setting<Boolean> smooth           = bool("Smooth", true);
+    public Setting<Integer> rainbowHue       = num("Delay", 240, 0, 600);
+    public Setting<Float>   rainbowBrightness = num("Brightness", 200.0f, 1.0f, 255.0f);
+    public Setting<Float>   rainbowSaturation = num("Saturation", 140.0f, 1.0f, 255.0f);
 
     public Setting<Boolean> clickGuiFont = bool("ClickGUI Font", false);
-    public Setting<Boolean> hudFont = bool("HUD Font", false);
-    public Setting<String> fontName = str("Font Name", "");
+    public Setting<Boolean> hudFont      = bool("HUD Font", false);
+    public Setting<String>  fontName     = str("Font Name", "");
 
     private static final Color CAT_COMBAT   = new Color(196,  88,  90);
     private static final Color CAT_WORLD    = new Color(118, 168, 118);
@@ -60,8 +45,8 @@ public class ClickGuiModule extends Module {
 
     public Color categoryAccent(Module.Category cat, float yOffset) {
         Theme t = theme.getValue();
-        if (t == Theme.RAINBOW) return rainbowAt(yOffset);
-        if (t == Theme.CUSTOM) return customColor.getValue();
+        if (t == Theme.RAINBOW)  return rainbowAt(yOffset);
+        if (t == Theme.CUSTOM)   return customColor.getValue();
         if (t == Theme.HOMOVORE) return HOMOVORE_ACCENT;
         if (cat == null) return CAT_CLIENT;
         switch (cat) {
@@ -84,14 +69,14 @@ public class ClickGuiModule extends Module {
 
     public Color chatAccent() {
         Theme t = theme.getValue();
-        if (t == Theme.RAINBOW) return rainbowAt(0f);
-        if (t == Theme.CUSTOM) return customColor.getValue();
+        if (t == Theme.RAINBOW)  return rainbowAt(0f);
+        if (t == Theme.CUSTOM)   return customColor.getValue();
         if (t == Theme.HOMOVORE) return HOMOVORE_ACCENT;
         return Color.WHITE;
     }
 
     public Color rainbowAt(float yOffset) {
-        return dev.leonetic.util.ColorUtil.rainbow((int) (yOffset / 10f * rainbowHue.getValue()));
+        return dev.leonetic.util.ColorUtil.rainbow((int)(yOffset / 10f * rainbowHue.getValue()));
     }
 
     public float getExpandSpeed() {
@@ -101,24 +86,26 @@ public class ClickGuiModule extends Module {
     public ClickGuiModule() {
         super("ClickGui", "Opens the ClickGui", Module.Category.CLIENT);
 
-        this.bind.setValue(new Bind(GLFW.GLFW_KEY_UNKNOWN));
-        this.bind.setVisibility(v -> false);
+        this.bind.setValue(new Bind(GLFW.GLFW_KEY_RIGHT_SHIFT));
         this.bindMode.setVisibility(v -> false);
-        KeyBindingHelper.registerKeyBinding(OPEN_GUI_KEY);
+
         rainbowHue.setVisibility(v -> theme.getValue() == Theme.RAINBOW);
         rainbowBrightness.setVisibility(v -> theme.getValue() == Theme.RAINBOW);
         rainbowSaturation.setVisibility(v -> theme.getValue() == Theme.RAINBOW);
         customColor.setVisibility(v -> theme.getValue() == Theme.CUSTOM);
         fontName.setVisibility(v -> clickGuiFont.getValue() || hudFont.getValue());
+
         INSTANCE = this;
     }
 
     @Subscribe
     public void onSettingChange(ClientEvent event) {
-        if (event.getType() == ClientEvent.Type.SETTING_UPDATE && event.getSetting().getFeature().equals(this)) {
+        if (event.getType() == ClientEvent.Type.SETTING_UPDATE
+                && event.getSetting().getFeature().equals(this)) {
             if (event.getSetting().equals(this.prefix)) {
                 Homovore.commandManager.setCommandPrefix(this.prefix.getPlannedValue());
-                Command.sendMessage("Prefix set to {global} %s", Homovore.commandManager.getCommandPrefix());
+                Command.sendMessage("Prefix set to {global} %s",
+                        Homovore.commandManager.getCommandPrefix());
             }
             if (event.getSetting().equals(this.clickGuiFont)
                     || event.getSetting().equals(this.hudFont)
@@ -130,31 +117,22 @@ public class ClickGuiModule extends Module {
 
     @Override
     public void onEnable() {
-        if (nullCheck()) {
-            return;
-        }
+        if (nullCheck()) return;
         mc.setScreen(HomovoreGui.getClickGui());
     }
 
     @Override
     public void onLoad() {
-
         Color fixedAccent = new Color(120, 175, 220, 220);
-        Homovore.colorManager.register("ui", () -> fixedAccent);
-        Homovore.colorManager.register("chat", this::chatAccent);
+        Homovore.colorManager.register("ui",          () -> fixedAccent);
+        Homovore.colorManager.register("chat",        this::chatAccent);
         Homovore.colorManager.register("chatBracket", this::chatAccent);
         Homovore.commandManager.setCommandPrefix(this.prefix.getValue());
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (OPEN_GUI_KEY.consumeClick()) {
-                if (client.screen == null && !isEnabled()) enable();
-            }
-        });
     }
 
     @Override
     public void onTick() {
-        if (!(ClickGuiModule.mc.screen instanceof HomovoreGui)) {
+        if (!(mc.screen instanceof HomovoreGui)) {
             this.disable();
         }
     }

@@ -9,6 +9,7 @@ import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Pose;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -39,6 +40,8 @@ public class FakePlayerCommand extends Command {
                         .executes(ctx -> removeAll()))
                 .then(literal("pop")
                         .executes(ctx -> popAll()))
+                .then(literal("swim")
+                        .executes(ctx -> toggleSwim()))
                 .then(argument("name", StringArgumentType.word())
                         .executes(ctx -> spawn(StringArgumentType.getString(ctx, "name"))));
     }
@@ -59,6 +62,33 @@ public class FakePlayerCommand extends Command {
             return fail("No fake players to pop. Spawn one first.");
         }
         return success("Popped %s fake player(s)", popped);
+    }
+
+    private int toggleSwim() {
+        if (nullCheck()) {
+            return fail("You need to be in a world to do that.");
+        }
+
+        boolean anyStanding = false;
+        int found = 0;
+        for (RemotePlayer fake : spawned) {
+            if (fake.level() != mc.level) continue;
+            found++;
+            if (fake.getPose() != Pose.SWIMMING) anyStanding = true;
+        }
+        if (found == 0) {
+            return fail("No fake players. Spawn one first.");
+        }
+
+        Pose pose = anyStanding ? Pose.SWIMMING : Pose.STANDING;
+        for (RemotePlayer fake : spawned) {
+            if (fake.level() != mc.level) continue;
+            fake.setPose(pose);
+            fake.refreshDimensions();
+        }
+        return success(pose == Pose.SWIMMING
+                ? "Fake player(s) now in swim pose."
+                : "Fake player(s) now standing.");
     }
 
     private int spawn(String name) {

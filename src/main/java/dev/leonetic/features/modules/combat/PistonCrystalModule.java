@@ -264,20 +264,26 @@ public class PistonCrystalModule extends Module {
 
         Setup best = null;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        boolean lowPose = target.getBbHeight() <= 1.0f;
 
         for (int bx = minX; bx <= maxX; bx++) {
             for (int by = minY; by <= maxY; by++) {
                 for (int bz = minZ; bz <= maxZ; bz++) {
                     cursor.set(bx, by, bz);
-                    BlockPos head = cursor.above().immutable();
+                    BlockPos cell = cursor.immutable();
+                    BlockPos[] heads = lowPose
+                            ? new BlockPos[]{cell, cell.above()}
+                            : new BlockPos[]{cell.above()};
 
-                    for (Direction dir : Direction.Plane.HORIZONTAL) {
-                        Setup side = sideSetup(target, head, dir, eye, range);
-                        if (side != null && (best == null || side.damage() > best.damage()))
-                            best = side;
-                        Setup top = topSetup(target, head, dir, eye, range);
-                        if (top != null && (best == null || top.damage() > best.damage()))
-                            best = top;
+                    for (BlockPos head : heads) {
+                        for (Direction dir : Direction.Plane.HORIZONTAL) {
+                            Setup side = sideSetup(target, head, dir, eye, range);
+                            if (side != null && (best == null || side.damage() > best.damage()))
+                                best = side;
+                            Setup top = topSetup(target, head, dir, eye, range);
+                            if (top != null && (best == null || top.damage() > best.damage()))
+                                best = top;
+                        }
                     }
                 }
             }
@@ -442,12 +448,35 @@ public class PistonCrystalModule extends Module {
         for (Player p : mc.level.players()) {
             if (p == mc.player || p.isDeadOrDying()) continue;
             if (targets != null && !targets.isValidPlayerTarget(p)) continue;
+            if (isPhased(p)) continue;
             double dSq = mc.player.distanceToSqr(p);
             if (dSq > TARGET_RANGE_SQ || dSq >= bestSq) continue;
             bestSq = dSq;
             best   = p;
         }
         return best;
+    }
+
+    private boolean isPhased(LivingEntity target) {
+        AABB bb = target.getBoundingBox().deflate(0.001);
+        int minX = Mth.floor(bb.minX), maxX = Mth.floor(bb.maxX);
+        int minY = Mth.floor(bb.minY), maxY = Mth.floor(bb.maxY);
+        int minZ = Mth.floor(bb.minZ), maxZ = Mth.floor(bb.maxZ);
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    cursor.set(x, y, z);
+                    BlockState state = mc.level.getBlockState(cursor);
+                    if (state.isAir()) continue;
+                    VoxelShape shape = state.getCollisionShape(mc.level, cursor);
+                    if (shape.isEmpty()) continue;
+                    if (shape.bounds().move(x, y, z).intersects(bb)) return true;
+                }
+            }
+        }
+        return false;
     }
 
     private float calcDamage(LivingEntity target, Vec3 explosionPos, BlockPos phantomBase) {

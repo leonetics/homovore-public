@@ -58,6 +58,13 @@ public class AutoMineModule extends Module {
     private final Setting<Boolean> glassPush     = bool("GlassPush", false);
     private final Setting<Integer> glassAttempts = num("GlassAttempts", 2, 1, 5);
 
+    private final Setting<Boolean> glassRender = bool("GlassRender", true).setPage("Render");
+    private final Setting<Float> glassFadeTime = num("GlassFadeTime", 0.5f, 0.05f, 2.0f).setPage("Render")
+            .setVisibility(v -> glassRender.getValue());
+    private final Setting<Color> glassFillColor = color("GlassFillColor", 255, 255, 255, 50).setPage("Render")
+            .setVisibility(v -> glassRender.getValue());
+    private final Setting<Color> glassOutlineColor = color("GlassOutlineColor", 255, 255, 255, 255).setPage("Render")
+            .setVisibility(v -> glassRender.getValue());
     private final Setting<Boolean> renderDebugScores = bool("DebugScores", false).setPage("Render");
 
     private Player targetPlayer = null;
@@ -70,6 +77,8 @@ public class AutoMineModule extends Module {
 
     private BlockPos glassTargetPos = null;
     private int glassUsedAttempts = 0;
+    private BlockPos glassRenderPos = null;
+    private long glassRenderStart = 0L;
 
     private final Long2LongOpenHashMap enemyBreaking = new Long2LongOpenHashMap();
     private static final long ENEMY_BREAK_TTL_MS = 1000;
@@ -104,6 +113,7 @@ public class AutoMineModule extends Module {
         ignorePos = null;
         enemyBreaking.clear();
         resetGlass();
+        glassRenderPos = null;
     }
 
     @Subscribe
@@ -327,6 +337,8 @@ public class AutoMineModule extends Module {
         if (placeGlass(pos)) {
             glassUsedAttempts++;
             mine.holdRebreak(pos, 5);
+            glassRenderPos = pos.immutable();
+            glassRenderStart = System.currentTimeMillis();
         }
     }
 
@@ -597,6 +609,25 @@ public class AutoMineModule extends Module {
         double d = targetPlayer.position().distanceTo(Vec3.atCenterOf(blockPos));
         score += 10 / d;
         return score;
+    }
+
+    @Override
+    public void onRender3D(Render3DEvent event) {
+        if (nullCheck() || !glassRender.getValue() || glassRenderPos == null) return;
+
+        long age = System.currentTimeMillis() - glassRenderStart;
+        double fadeMs = glassFadeTime.getValue() * 1000.0;
+        if (age > fadeMs) {
+            glassRenderPos = null;
+            return;
+        }
+        double t = age / fadeMs;
+        Color fc = glassFillColor.getValue();
+        Color oc = glassOutlineColor.getValue();
+        RenderUtil.drawBoxFilled(event.getMatrix(), glassRenderPos,
+                new Color(fc.getRed(), fc.getGreen(), fc.getBlue(), (int) (fc.getAlpha() * (1 - t))));
+        RenderUtil.drawBox(event.getMatrix(), glassRenderPos,
+                new Color(oc.getRed(), oc.getGreen(), oc.getBlue(), (int) (oc.getAlpha() * (1 - t))), 1.5f);
     }
 
     @Subscribe

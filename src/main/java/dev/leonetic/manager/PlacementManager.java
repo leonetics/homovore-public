@@ -838,7 +838,7 @@ public class PlacementManager extends Feature {
         try {
             for (BlockPos pos : poses) {
                 BlockPos neighbour = pos.relative(face);
-                Vec3 hitPos = Vec3.atCenterOf(pos).relative(face, 0.5);
+                Vec3 hitPos = getFireworkHitPos(pos, face);
                 Direction hitSide = face.getOpposite();
                 BlockHitResult hit = new BlockHitResult(hitPos, hitSide, neighbour, false);
 
@@ -850,6 +850,17 @@ public class PlacementManager extends Feature {
             if (swapped) InventoryUtil.click(containerSlot, InventoryUtil.selected(), ClickType.SWAP);
         }
         return true;
+    }
+
+    private Vec3 getFireworkHitPos(BlockPos pos, Direction face) {
+        if (face != Direction.DOWN || mc.player == null) {
+            return Vec3.atCenterOf(pos).relative(face, 0.5);
+        }
+
+        Vec3 player = mc.player.position();
+        double x = pos.getX() + (player.x >= pos.getX() + 0.5 ? 0.15 : 0.85);
+        double z = pos.getZ() + (player.z >= pos.getZ() + 0.5 ? 0.15 : 0.85);
+        return new Vec3(x, pos.getY(), z);
     }
 
     private Vec3 getLookVector(float yaw, float pitch) {

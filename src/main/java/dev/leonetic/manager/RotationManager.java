@@ -62,7 +62,7 @@ public class RotationManager {
 
         requests.removeIf(r -> r.id.equals(request.id));
         requests.add(request);
-        requests.sort(Comparator.comparingInt(r -> -r.priority));
+        requests.sort(Comparator.comparingInt((RotationRequest r) -> r.priority).reversed());
     }
 
     public void cancel(String id) {

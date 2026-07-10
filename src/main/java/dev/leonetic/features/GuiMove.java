@@ -19,46 +19,54 @@ import org.lwjgl.glfw.GLFW;
 
 public class GuiMove implements Util {
 
+    private boolean up, down, left, right, jump, shift, sprint;
+
     public void init() {
         EVENT_BUS.register(this);
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (shouldRun()) {
+                mc.options.keyUp.setDown(up);
+                mc.options.keyDown.setDown(down);
+                mc.options.keyLeft.setDown(left);
+                mc.options.keyRight.setDown(right);
+                mc.options.keyJump.setDown(jump);
+                mc.options.keyShift.setDown(shift);
+                mc.options.keySprint.setDown(sprint);
+            }
+        });
     }
 
     @Subscribe
     private void onKey(KeyInputEvent event) {
         if (event.getAction() != GLFW.GLFW_PRESS && event.getAction() != GLFW.GLFW_RELEASE) return;
-        if (!shouldRun()) return;
-
         if (mc.screen instanceof HomovoreGui && isArrowKey(event.getKey())) return;
+        
         boolean pressed = event.getAction() == GLFW.GLFW_PRESS;
         KeyEvent ke = new KeyEvent(event.getKey(), 0, 0);
-        pass(mc.options.keyUp,     ke, null, pressed);
-        pass(mc.options.keyDown,   ke, null, pressed);
-        pass(mc.options.keyLeft,   ke, null, pressed);
-        pass(mc.options.keyRight,  ke, null, pressed);
-        pass(mc.options.keyJump,   ke, null, pressed);
-        pass(mc.options.keyShift,  ke, null, pressed);
-        pass(mc.options.keySprint, ke, null, pressed);
+        
+        if (mc.options.keyUp.matches(ke)) up = pressed;
+        else if (mc.options.keyDown.matches(ke)) down = pressed;
+        else if (mc.options.keyLeft.matches(ke)) left = pressed;
+        else if (mc.options.keyRight.matches(ke)) right = pressed;
+        else if (mc.options.keyJump.matches(ke)) jump = pressed;
+        else if (mc.options.keyShift.matches(ke)) shift = pressed;
+        else if (mc.options.keySprint.matches(ke)) sprint = pressed;
     }
 
     @Subscribe
     private void onMouse(MouseInputEvent event) {
         if (event.getAction() != GLFW.GLFW_PRESS && event.getAction() != GLFW.GLFW_RELEASE) return;
-        if (!shouldRun()) return;
+        
         boolean pressed = event.getAction() == GLFW.GLFW_PRESS;
         MouseButtonEvent me = new MouseButtonEvent(0, 0, new MouseButtonInfo(event.getButton(), 0));
-        pass(mc.options.keyUp,     null, me, pressed);
-        pass(mc.options.keyDown,   null, me, pressed);
-        pass(mc.options.keyLeft,   null, me, pressed);
-        pass(mc.options.keyRight,  null, me, pressed);
-        pass(mc.options.keyJump,   null, me, pressed);
-        pass(mc.options.keyShift,  null, me, pressed);
-        pass(mc.options.keySprint, null, me, pressed);
-    }
-
-    private void pass(KeyMapping mapping, KeyEvent ke, MouseButtonEvent me, boolean pressed) {
-        boolean matched = ke != null ? mapping.matches(ke) : mapping.matchesMouse(me);
-        if (!matched) return;
-        mapping.setDown(pressed);
+        
+        if (mc.options.keyUp.matchesMouse(me)) up = pressed;
+        else if (mc.options.keyDown.matchesMouse(me)) down = pressed;
+        else if (mc.options.keyLeft.matchesMouse(me)) left = pressed;
+        else if (mc.options.keyRight.matchesMouse(me)) right = pressed;
+        else if (mc.options.keyJump.matchesMouse(me)) jump = pressed;
+        else if (mc.options.keyShift.matchesMouse(me)) shift = pressed;
+        else if (mc.options.keySprint.matchesMouse(me)) sprint = pressed;
     }
 
     private static boolean isArrowKey(int key) {
@@ -67,15 +75,12 @@ public class GuiMove implements Util {
     }
 
     private boolean shouldRun() {
-        Screen s = mc.screen;
-        if (s == null) return false;
-
-        if (s instanceof ChatScreen) return false;
-        if (s instanceof AbstractSignEditScreen) return false;
-        if (s instanceof AnvilScreen) return false;
-        if (s instanceof AbstractCommandBlockEditScreen) return false;
-        if (s instanceof StructureBlockEditScreen) return false;
-        return true;
+        return mc.screen != null 
+                && !(mc.screen instanceof ChatScreen)
+                && !(mc.screen instanceof AbstractSignEditScreen)
+                && !(mc.screen instanceof AnvilScreen)
+                && !(mc.screen instanceof AbstractCommandBlockEditScreen)
+                && !(mc.screen instanceof StructureBlockEditScreen);
     }
 
 }

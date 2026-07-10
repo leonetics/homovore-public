@@ -176,6 +176,14 @@ public class HomovoreGui extends Screen {
         if (GuiNavigator.handleKey(input.input())) {
             return true;
         }
+
+        if (input.input() == dev.leonetic.features.modules.client.ClickGuiModule.getInstance().bind.getValue().getKey()) {
+            if (System.currentTimeMillis() - openTime > 50) {
+                this.onClose();
+            }
+            return true;
+        }
+
         this.widgets.forEach(component -> component.onKeyPressed(input.input()));
         return super.keyPressed(input);
     }

@@ -12,11 +12,9 @@ import static dev.leonetic.util.traits.Util.EVENT_BUS;
 
 @Mixin(KeyboardHandler.class)
 public class MixinKeyboard {
-    @Inject(method = "keyPress", at = @At("TAIL"), cancellable = true)
+    @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void onKey(long window, int action, KeyEvent input, CallbackInfo ci) {
-        if (action != 0 && action != 1) {
-            return;
-        }
+        if (action != 0 && action != 1) return;
 
         if (action == 1 && EVENT_BUS.post(new KeyInputEvent(input.key(), action))) {
             ci.cancel();
@@ -25,3 +23,4 @@ public class MixinKeyboard {
         }
     }
 }
+
