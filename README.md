@@ -4,7 +4,7 @@
 
 <h1 align="center">Homovore</h1>
 
-> **⚠️ NOTE: Please consider this the HomoVore nightly/dev build.** 
+> **⚠️ NOTE: Please consider this the Homovore nightly/dev build.** 
 
 ### Join our discord: https://discord.gg/yMD5mhmNEc
 
