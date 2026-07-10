@@ -4,7 +4,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import dev.leonetic.event.impl.network.PacketEvent;
-import dev.leonetic.features.modules.client.ConnectorModule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -16,7 +15,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import static dev.leonetic.util.traits.Util.EVENT_BUS;
@@ -57,17 +55,6 @@ public class MixinClientConnection {
         ItemStack handStack = mc.player.getMainHandItem();
         if (packetStack.isEmpty() || handStack.isEmpty()) return false;
         return ItemStack.isSameItem(packetStack, handStack) && packetStack.getCount() == handStack.getCount();
-    }
-
-    @ModifyVariable(
-            method = "initiateServerboundPlayConnection(Ljava/lang/String;ILnet/minecraft/network/ProtocolInfo;Lnet/minecraft/network/ProtocolInfo;Lnet/minecraft/network/ClientboundPacketListener;Z)V",
-            at = @At("HEAD"),
-            argsOnly = true,
-            ordinal = 0
-    )
-    private String homovore$rewriteHandshakeHost(String host) {
-        ConnectorModule module = ConnectorModule.getInstance();
-        return module != null ? module.rewriteHandshakeHost(host) : host;
     }
 
     @Inject(method = "sendPacket", at = @At("HEAD"), cancellable = true)
