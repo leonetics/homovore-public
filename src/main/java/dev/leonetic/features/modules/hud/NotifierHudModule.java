@@ -114,7 +114,6 @@ public class NotifierHudModule extends HudModule {
         int width = mc.font.width(OPEN) + mc.font.width(e.icon.glyph)
                 + mc.font.width(SEP) + mc.font.width(e.message) + mc.font.width(CLOSE);
         int x = (screenWidth() - width) / 2;
-        mark(x, y, width, mc.font.lineHeight);
 
         int text = applyAlpha(TEXT_COLOR, alpha);
         int iconColor = applyAlpha(e.icon.color, alpha);

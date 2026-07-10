@@ -65,7 +65,6 @@ public class TestLimitHudModule extends HudModule {
     }
 
     private void drawLine(GuiGraphics ctx, String value, String label, int y) {
-        mark(LEFT_MARGIN, y, mc.font.width(value) + mc.font.width(label), mc.font.lineHeight);
         ctx.drawString(mc.font, value, LEFT_MARGIN, y, GRAY);
         ctx.drawString(mc.font, label, LEFT_MARGIN + mc.font.width(value), y, WHITE);
     }

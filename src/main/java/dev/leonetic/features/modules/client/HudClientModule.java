@@ -47,18 +47,6 @@ public class HudClientModule extends Module {
 
     private void register(HudModule element, boolean defaultOn) {
         elements.put(element, bool(element.getName(), defaultOn).setPage("Elements"));
-        Setting<org.joml.Vector2f> off = vec2f(element.getName() + "Offset", 0, 0).setPage("Layout");
-        off.setVisibility(v -> false);
-        element.setOffsetSetting(off);
-    }
-
-    public java.util.Collection<HudModule> getElements() {
-        return elements.keySet();
-    }
-
-    public boolean isEnabled(HudModule element) {
-        Setting<Boolean> s = elements.get(element);
-        return s != null && s.getValue();
     }
 
     @SuppressWarnings("unchecked")
@@ -80,21 +68,11 @@ public class HudClientModule extends Module {
     public void onRender2D(Render2DEvent event) {
         if (nullCheck()) return;
         if (mc.options.hideGui) return;
-        net.minecraft.client.gui.GuiGraphics ctx = event.getContext();
         dev.leonetic.util.render.font.Fonts.beginHudPass();
         try {
             for (Map.Entry<HudModule, Setting<Boolean>> entry : elements.entrySet()) {
                 if (!entry.getValue().getValue()) continue;
-                HudModule element = entry.getKey();
-                element.beginBounds();
-                ctx.pose().pushMatrix();
-                ctx.pose().translate(element.offsetX(), element.offsetY());
-                try {
-                    element.render(event);
-                } finally {
-                    ctx.pose().popMatrix();
-                    element.endBounds();
-                }
+                entry.getKey().render(event);
             }
         } finally {
             dev.leonetic.util.render.font.Fonts.endHudPass();

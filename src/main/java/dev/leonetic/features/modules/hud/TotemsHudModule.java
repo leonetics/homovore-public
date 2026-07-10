@@ -21,7 +21,6 @@ public class TotemsHudModule extends HudModule {
 
         int x = screenWidth() / 2 - ICON / 2;
         int y = screenHeight() - XP_BAR_TOP_OFFSET - GAP_ABOVE_XP - ICON;
-        mark(x, y, ICON, ICON);
 
         ItemStack stack = new ItemStack(Items.TOTEM_OF_UNDYING, Math.max(count, 1));
         event.getContext().renderItem(stack, x, y);

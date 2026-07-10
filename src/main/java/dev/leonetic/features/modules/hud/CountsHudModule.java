@@ -45,8 +45,6 @@ public class CountsHudModule extends HudModule {
             ItemStack stack = new ItemStack(ITEMS[i], Math.max(count, 1));
             drawIcon(ctx, stack, x, y);
             drawCount(ctx, count, x, y);
-            mark(x, y, Math.round(RENDER_ICON) + TEXT_PAD + mc.font.width(String.valueOf(count)),
-                    Math.round(RENDER_ICON));
         }
     }
 

@@ -87,7 +87,6 @@ public class ActiveModulesHudModule extends HudModule implements Jsonable {
 
             int width = mc.font.width(display) + mc.font.width(meta) + mc.font.width(suffix);
             int x = screenWidth() - RIGHT_MARGIN - width;
-            mark(x, y, width, mc.font.lineHeight);
 
             int nameColor = module.isEnabled() ? activeColor : GRAY;
             ctx.drawString(mc.font, display, x, y, nameColor);

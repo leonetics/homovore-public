@@ -39,7 +39,6 @@ public class PingHudModule extends HudModule {
         if (hud != null && hud.isElementEnabled(CoordinatesHudModule.class)) {
             ry -= mc.font.lineHeight;
         }
-        mark(rx, ry, totalWidth, mc.font.lineHeight);
 
         event.getContext().drawString(mc.font, label, rx, ry, WHITE);
         event.getContext().drawString(mc.font, value, rx + mc.font.width(label), ry, GRAY);

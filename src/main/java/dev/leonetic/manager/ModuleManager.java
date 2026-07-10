@@ -13,7 +13,6 @@ import dev.leonetic.features.modules.player.*;
 import dev.leonetic.features.settings.Bind;
 import dev.leonetic.features.modules.client.ClickGuiModule;
 import dev.leonetic.features.modules.client.HudClientModule;
-import dev.leonetic.features.modules.client.HudEditorModule;
 import dev.leonetic.features.modules.client.NotificationsModule;
 import dev.leonetic.features.modules.client.TestLimitModule;
 import dev.leonetic.features.modules.client.TargetsModule;
@@ -68,7 +67,6 @@ public class ModuleManager implements Jsonable, Util {
     public void init() {
         register(new HudClientModule());
         register(new ClickGuiModule());
-        register(new HudEditorModule());
         register(new NotificationsModule());
         register(new TestLimitModule());
         register(new TargetsModule());

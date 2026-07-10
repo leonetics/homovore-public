@@ -44,7 +44,6 @@ public class CoordinatesHudModule extends HudModule {
         boolean left = hudClient != null && hudClient.coordinatesLeft.getValue();
         int rx = left ? LEFT_MARGIN : screenWidth() - RIGHT_MARGIN - totalWidth;
         int ry = bottomAnchor() - BOTTOM_MARGIN - mc.font.lineHeight;
-        mark(rx, ry, totalWidth, mc.font.lineHeight);
 
         ctx.drawString(mc.font, main, rx, ry, WHITE);
         if (!other.isEmpty()) {
