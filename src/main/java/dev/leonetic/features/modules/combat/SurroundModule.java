@@ -38,6 +38,7 @@ public class SurroundModule extends Module {
 
     private final Setting<Boolean> fireworks     = bool("Fireworks", true).setPage("General");
     private final Setting<Boolean> safe          = bool("Safe", false).setPage("General");
+    private final Setting<Boolean> keepReplacing = bool("KeepReplacing", false).setPage("General");
 
     private final Setting<Boolean> test          = bool("Test", false).setPage("General");
 
@@ -84,27 +85,31 @@ public class SurroundModule extends Module {
     private final Set<BlockPos> helpBlockedPoses = ConcurrentHashMap.newKeySet();
 
     private final Map<BlockPos, Deque<Long>> breakTimes = new ConcurrentHashMap<>();
+    private final Map<BlockPos, Integer> breakCounts = new ConcurrentHashMap<>();
     private static final long REBREAK_WINDOW_MS = 20 * 50;
     private static final int REBREAK_THRESHOLD = 3;
     private static final int SAFE_REBREAK_THRESHOLD = 4;
 
     private final PlacementManager.PlacementListener airRefillListener = (pos, nowAir) -> {
 
-        ownedQueued.remove(pos);
-        if (!nowAir) return;
-
         boolean wanted = wantedPoses.contains(pos);
         if (!wanted && !extendPoses.contains(pos)) return;
 
+        boolean wasOwned = ownedQueued.remove(pos);
+        if (!nowAir) {
+            if (wasOwned) breakCounts.merge(pos.immutable(), 1, Integer::sum);
+            return;
+        }
+
         recordBreak(pos, System.currentTimeMillis());
 
-        if (fireworkPoses.contains(pos)) return;
+        if (fireworkPoses.contains(pos) && !keepReplacing.getValue()) return;
 
         if (speedMineClaims(pos)) return;
 
         if (cachedFireworkSlot >= 0 && canRocket(pos, System.currentTimeMillis())) {
             fireworkPoses.add(pos.immutable());
-            return;
+            if (!keepReplacing.getValue()) return;
         }
 
         if (!wanted) return;
@@ -150,6 +155,7 @@ public class SurroundModule extends Module {
         helpBlockedPoses.clear();
         fireworkDeployedAt.clear();
         breakTimes.clear();
+        breakCounts.clear();
         cachedObsSlot = -1;
         cachedFireworkSlot = -1;
         renderMap.clear();
@@ -265,6 +271,7 @@ public class SurroundModule extends Module {
             for (BlockPos pos : fireworkUsePoses) {
                 fireworkDeployedAt.put(pos.immutable(), now);
                 rocketRenderMap.put(pos.immutable(), now);
+                breakCounts.remove(pos);
             }
         }
 
@@ -652,11 +659,17 @@ public class SurroundModule extends Module {
         if (cachedFireworkSlot < 0) return false;
 
         if (!canRocket(pos, now)) return false;
-        fireworkPoses.add(pos.immutable());
-        if (speedMineClaims(pos)) return true;
-        if (hasLiveFireworkAt(pos)) return true;
+        if (speedMineClaims(pos)) return false;
+        if (hasLiveFireworkAt(pos)) {
+            fireworkPoses.add(pos.immutable());
+            return !keepReplacing.getValue();
+        }
         Long last = fireworkDeployedAt.get(pos);
-        if (last != null && now - last < FIREWORK_REDEPLOY_COOLDOWN_MS) return true;
+        if (last != null && now - last < FIREWORK_REDEPLOY_COOLDOWN_MS) {
+            fireworkPoses.add(pos.immutable());
+            return !keepReplacing.getValue();
+        }
+        fireworkPoses.add(pos.immutable());
         out.add(pos);
         return true;
     }
@@ -692,6 +705,8 @@ public class SurroundModule extends Module {
     }
 
     private boolean isHot(BlockPos pos, long now) {
+        if (safe.getValue()) return breakCounts.getOrDefault(pos, 0) >= SAFE_REBREAK_THRESHOLD;
+
         Deque<Long> times = breakTimes.get(pos);
         if (times == null) return false;
         int count = 0;
@@ -700,7 +715,7 @@ public class SurroundModule extends Module {
                 if (now - t <= REBREAK_WINDOW_MS) count++;
             }
         }
-        return count >= (safe.getValue() ? SAFE_REBREAK_THRESHOLD : REBREAK_THRESHOLD);
+        return count >= REBREAK_THRESHOLD;
     }
 
     private boolean isFullBlock(BlockPos pos) {
@@ -708,7 +723,8 @@ public class SurroundModule extends Module {
     }
 
     private boolean hasLiveFireworkAt(BlockPos pos) {
-        AABB box = new AABB(pos).inflate(0.5, 0.0, 0.5).expandTowards(0.0, 4.0, 0.0);
+        AABB box = new AABB(pos.getX() + 0.2, pos.getY(), pos.getZ() + 0.2,
+                pos.getX() + 0.8, pos.getY() + 4.0, pos.getZ() + 0.8);
         for (FireworkRocketEntity fw : mc.level.getEntitiesOfClass(FireworkRocketEntity.class, box)) {
             if (fw.isAlive()) return true;
         }
