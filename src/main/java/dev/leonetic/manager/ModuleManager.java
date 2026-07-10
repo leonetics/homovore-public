@@ -41,6 +41,7 @@ import dev.leonetic.features.modules.render.ShadersModule;
 import dev.leonetic.features.modules.render.SkyboxModule;
 import dev.leonetic.features.modules.render.SeeThroughModule;
 import dev.leonetic.features.modules.render.FullbrightModule;
+import dev.leonetic.features.modules.render.FreecamModule;
 import dev.leonetic.features.modules.render.LogoutSpotsModule;
 import dev.leonetic.features.modules.render.NametagsModule;
 import dev.leonetic.features.modules.render.TablistModule;
@@ -94,6 +95,7 @@ public class ModuleManager implements Jsonable, Util {
         register(new DiscordRPCModule());
         register(new EndermanLookModule());
         register(new CrystalHandModule());
+        register(new FreecamModule());
         register(new FullbrightModule());
         register(new NoRenderModule());
         register(new ShadersModule());

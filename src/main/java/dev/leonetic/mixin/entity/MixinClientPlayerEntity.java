@@ -10,6 +10,7 @@ import dev.leonetic.features.modules.movement.VelocityModule;
 import dev.leonetic.features.modules.movement.NoSlowModule;
 import dev.leonetic.features.modules.movement.SprintModule;
 import dev.leonetic.features.modules.render.NoRenderModule;
+import dev.leonetic.features.modules.render.FreecamModule;
 import dev.leonetic.features.modules.world.ScaffoldModule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -28,6 +29,17 @@ import static dev.leonetic.util.traits.Util.EVENT_BUS;
 
 @Mixin(LocalPlayer.class)
 public class MixinClientPlayerEntity {
+
+    @Inject(
+        method = "aiStep",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/ClientInput;tick()V", shift = At.Shift.AFTER)
+    )
+    private void homovore$freecamInput(CallbackInfo ci) {
+        FreecamModule freecam = Homovore.moduleManager.getModuleByClass(FreecamModule.class);
+        if (freecam != null && freecam.isEnabled()) {
+            freecam.handleInput((LocalPlayer) (Object) this);
+        }
+    }
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void preTickHook(CallbackInfo ci) {

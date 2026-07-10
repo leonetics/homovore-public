@@ -3,6 +3,7 @@ package dev.leonetic.mixin.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.leonetic.Homovore;
 import dev.leonetic.features.modules.render.NoRenderModule;
+import dev.leonetic.features.modules.render.FreecamModule;
 import dev.leonetic.features.modules.render.ShadersModule;
 import dev.leonetic.util.render.HandShaderChain;
 import dev.leonetic.util.render.HandShaderRender;
@@ -17,6 +18,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public class MixinGameRenderer {
+
+    @Inject(method = "pick", at = @At("TAIL"))
+    private void homovore$freecamPick(float tickDelta, CallbackInfo ci) {
+        FreecamModule freecam = Homovore.moduleManager.getModuleByClass(FreecamModule.class);
+        if (freecam == null || !freecam.isEnabled() || !freecam.isReady()) return;
+
+        var minecraft = net.minecraft.client.Minecraft.getInstance();
+        minecraft.hitResult = freecam.raycastBlock(tickDelta);
+        minecraft.crosshairPickEntity = null;
+    }
 
     @Inject(
         method = "renderLevel",

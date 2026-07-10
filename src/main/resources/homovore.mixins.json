@@ -33,6 +33,7 @@
     "network.MixinClientPlayNetworkHandler",
     "network.MixinMultiPlayerGameMode",
     "render.MixinItemInHandRenderer",
+    "render.MixinCamera",
     "render.MixinBlockRenderDispatcher",
     "render.MixinChestRenderer",
     "render.MixinClientLevelNoRender",
