@@ -41,7 +41,7 @@ public class SurroundModule extends Module {
 
     private final Setting<Boolean> fireworks     = bool("Fireworks", true).setPage("General");
     private final Setting<Boolean> crystalProtect = bool("CrystalProtect", true).setPage("General");
-    private final Setting<Boolean> safeRocket    = bool("SafeRocket", false).setPage("General");
+    private final Setting<Boolean> safeRocket    = bool("SafeRocket", true).setPage("General");
     private final Setting<Boolean> keepReplacing = bool("KeepReplacing", true).setPage("General");
 
     private final Setting<Boolean> test          = bool("Test", false).setPage("General");

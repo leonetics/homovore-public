@@ -58,6 +58,11 @@ public class AutoMineModule extends Module {
     private final Setting<Boolean> glassPush     = bool("GlassPush", false);
     private final Setting<Integer> glassAttempts = num("GlassAttempts", 2, 1, 5);
 
+    private final Setting<Boolean> glassRender = bool("GlassRender", true).setPage("Render");
+    private final Setting<Color> glassFillColor = color("GlassFillColor", 255, 255, 255, 50).setPage("Render")
+            .setVisibility(v -> glassRender.getValue());
+    private final Setting<Color> glassOutlineColor = color("GlassOutlineColor", 255, 255, 255, 255).setPage("Render")
+            .setVisibility(v -> glassRender.getValue());
     private final Setting<Boolean> renderDebugScores = bool("DebugScores", false).setPage("Render");
 
     private Player targetPlayer = null;
@@ -601,10 +606,10 @@ public class AutoMineModule extends Module {
 
     @Override
     public void onRender3D(Render3DEvent event) {
-        if (nullCheck() || glassTargetPos == null) return;
+        if (nullCheck() || !glassRender.getValue() || glassTargetPos == null) return;
 
-        RenderUtil.drawBoxFilled(event.getMatrix(), glassTargetPos, new Color(255, 255, 255, 50));
-        RenderUtil.drawBox(event.getMatrix(), glassTargetPos, new Color(255, 255, 255, 255), 1.5f);
+        RenderUtil.drawBoxFilled(event.getMatrix(), glassTargetPos, glassFillColor.getValue());
+        RenderUtil.drawBox(event.getMatrix(), glassTargetPos, glassOutlineColor.getValue(), 1.5f);
     }
 
     @Subscribe
