@@ -21,6 +21,7 @@ public class NoRenderModule extends Module {
     public final Setting<Boolean> noBossBar = bool("NoBoss", true).setPage("Overlays");
     public final Setting<Boolean> noPotIcon = bool("NoPotIcon", true).setPage("Overlays");
     public final Setting<Boolean> noCrosshair = bool("NoCrosshair", false).setPage("Overlays");
+    public final Setting<Boolean> noCooldown = bool("NoCooldown", false).setPage("Overlays");
     public final Setting<Boolean> noItemName = bool("NoItemName", false).setPage("Overlays");
     public final Setting<Boolean> noArmor = bool("NoArmor", true).setPage("Overlays");
     public final Setting<Boolean> noNausea = bool("NoNausea", true).setPage("Overlays");

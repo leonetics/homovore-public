@@ -1,7 +1,9 @@
 package dev.leonetic.mixin.render.gui;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.leonetic.event.impl.render.Render2DEvent;
 import dev.leonetic.features.modules.render.NoRenderModule;
+import net.minecraft.client.AttackIndicatorStatus;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -47,6 +49,21 @@ public abstract class MixinInGameHud {
         if (NoRenderModule.isActive(m -> m.noCrosshair.getValue())) {
             ci.cancel();
         }
+    }
+
+    @ModifyExpressionValue(
+        method = {"renderCrosshair", "renderHotbarAndDecorations"},
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/OptionInstance;get()Ljava/lang/Object;"
+        )
+    )
+    private Object homovore$noCooldown(Object value) {
+        if (value instanceof AttackIndicatorStatus
+            && NoRenderModule.isActive(m -> m.noCooldown.getValue())) {
+            return AttackIndicatorStatus.OFF;
+        }
+        return value;
     }
 
     @Inject(method = "renderSelectedItemName", at = @At("HEAD"), cancellable = true)

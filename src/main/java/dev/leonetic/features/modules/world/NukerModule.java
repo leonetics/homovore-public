@@ -8,6 +8,7 @@ import dev.leonetic.event.system.Subscribe;
 import dev.leonetic.features.commands.Command;
 import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.settings.Setting;
+import dev.leonetic.util.LitematicaSchematics;
 import dev.leonetic.util.render.RenderUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,13 +26,17 @@ public class NukerModule extends Module {
 
     private static final double NUKE_PRIORITY = 50.0;
 
-    enum Shape { All, Flat }
+    enum Shape { All, Flat, Schematic }
 
     enum BlockMode { All, Select }
 
     private final Setting<Double>    range     = num("Range", 5.14, 0.0, 7.0);
     private final Setting<Shape>     shape     = mode("Shape", Shape.All);
     private final Setting<BlockMode> blockMode = mode("Blocks", BlockMode.All);
+
+    private final Setting<Boolean> schematicAllLayers     = bool("AllLayers", false).setVisibility(v -> shape.getValue() == Shape.Schematic);
+    private final Setting<Boolean> schematicExtraBlocks   = bool("ExtraBlocks", false).setVisibility(v -> shape.getValue() == Shape.Schematic);
+    private final Setting<Boolean> schematicIncorrectState = bool("IncorrectState", false).setVisibility(v -> shape.getValue() == Shape.Schematic);
 
     private final Setting<Boolean> render    = bool("Render", true).setPage("Render");
     private final Setting<Float>   lineWidth = num("LineWidth", 1.5f, 0.5f, 5.0f).setPage("Render");
@@ -94,6 +99,7 @@ public class NukerModule extends Module {
                     if (state.isAir()) continue;
                     if (!canBreak(pos, state)) continue;
                     if (!passesFilter(state)) continue;
+                    if (shape.getValue() == Shape.Schematic && !passesSchematicFilter(pos, state)) continue;
                     if (!mine.inBreakRange(pos)) continue;
 
                     candidates.add(pos.immutable());
@@ -146,5 +152,44 @@ public class NukerModule extends Module {
 
     private boolean canBreak(BlockPos pos, BlockState state) {
         return !state.isAir() && state.getDestroySpeed(mc.level, pos) >= 0;
+    }
+
+    /**
+     * Schematic filter: only target world blocks that don't match the loaded Litematica schematic.
+     * <ul>
+     *   <li><b>Incorrect Block:</b> schematic has a different non-air block — always targeted.</li>
+     *   <li><b>Incorrect State:</b> same block type but different state — only if IncorrectState is enabled.</li>
+     *   <li><b>Extra Block:</b> schematic is air but the world has a block — only if ExtraBlocks is enabled.</li>
+     * </ul>
+     */
+    private boolean passesSchematicFilter(BlockPos pos, BlockState worldState) {
+        if (!LitematicaSchematics.isAvailable()) return false;
+
+        BlockState schematicState = LitematicaSchematics.getSchematicBlockState(pos, !schematicAllLayers.getValue());
+        if (schematicState == null) return false; // Position not covered by any schematic
+
+        if (schematicState.isAir()) {
+            // Schematic expects air here but the world has a block — this is an "extra block".
+            if (!schematicExtraBlocks.getValue()) return false;
+            // Only nuke if the position is actually inside a schematic placement's sub-region box.
+            // (The schematic world loads whole chunks, so positions outside the real sub-regions
+            //  also read as air — we must not nuke those.)
+            return LitematicaSchematics.isInsideLoadedSchematicBox(pos);
+        }
+
+        // Schematic wants a non-air block here
+        if (worldState.getBlock() != schematicState.getBlock()) {
+            // Incorrect block: completely wrong block type — always target
+            return true;
+        }
+
+        // Same block type — check if the state differs
+        if (!worldState.equals(schematicState)) {
+            // Incorrect state: right block, wrong properties
+            return schematicIncorrectState.getValue();
+        }
+
+        // Block matches the schematic perfectly — don't break
+        return false;
     }
 }

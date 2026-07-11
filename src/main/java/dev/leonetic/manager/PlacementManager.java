@@ -887,9 +887,14 @@ public class PlacementManager extends Feature {
             return Vec3.atCenterOf(pos).relative(face, 0.5);
         }
 
+        // Lean toward the corner facing away from the player, but don't jam it fully
+        // into the corner: sitting ~0.15 from the edge can end up placing crystals there.
+        // 0.7 of the way through keeps the firework in that corner-ish region while
+        // staying clear enough of the edge.
+        final double lean = 0.7;
         Vec3 player = mc.player.position();
-        double x = pos.getX() + (player.x >= pos.getX() + 0.5 ? 0.15 : 0.85);
-        double z = pos.getZ() + (player.z >= pos.getZ() + 0.5 ? 0.15 : 0.85);
+        double x = pos.getX() + (player.x >= pos.getX() + 0.5 ? 1.0 - lean : lean);
+        double z = pos.getZ() + (player.z >= pos.getZ() + 0.5 ? 1.0 - lean : lean);
         return new Vec3(x, pos.getY(), z);
     }
 

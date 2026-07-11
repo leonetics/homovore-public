@@ -15,6 +15,9 @@ public class ViewModelModule extends Module {
     public final Setting<Boolean> noSwapAnimation = bool("NoSwapAnimation", false);
     public final Setting<Boolean> oldAnimation = bool("OldAnimation", false);
 
+    public final Setting<Double> swingSpeed = num("SwingSpeed", 1.0, 0.1, 5.0).setPage("Swing");
+    public final Setting<Integer> swingDelay = num("SwingDelay", 3, 0, 20).setPage("Swing");
+
     public ViewModelModule() {
         super("ViewModel", "change scale position and stuff", Category.RENDER);
     }

@@ -1,6 +1,7 @@
 package dev.leonetic;
 
 import dev.leonetic.features.GuiMove;
+import dev.leonetic.features.modules.client.ClickGuiModule;
 import dev.leonetic.manager.*;
 import dev.leonetic.util.BuildConfig;
 import dev.leonetic.util.TextUtil;
@@ -63,6 +64,7 @@ public class Homovore implements ModInitializer, ClientModInitializer {
 
         long startTime = System.nanoTime();
 
+        ClickGuiModule.registerKeyMapping();
         eventManager.init();
         rotationManager.init();
         swapManager.init();

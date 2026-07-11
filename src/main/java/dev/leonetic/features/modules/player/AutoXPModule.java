@@ -3,8 +3,8 @@ package dev.leonetic.features.modules.player;
 import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.entity.player.TickEvent;
 import dev.leonetic.event.system.Subscribe;
-import dev.leonetic.features.commands.Command;
 import dev.leonetic.features.modules.Module;
+import dev.leonetic.features.modules.combat.OffhandModule;
 import dev.leonetic.features.settings.Bind;
 import dev.leonetic.features.settings.Setting;
 import dev.leonetic.manager.RotationRequest;
@@ -20,110 +20,64 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 
 import static dev.leonetic.util.inventory.InventoryUtil.FULL_SCOPE;
-//hello leonetic your old autoxp was dogshit
+
 public class AutoXPModule extends Module {
 
+    private final Setting<Integer> minDurability = num("MinDurability", 40, 1, 100);
+    private final Setting<Integer> stopDurability = num("StopDurability", 70, 0, 100);
     private final Setting<Bind> throwBind = key("Throw", Bind.none());
-    private final Setting<Boolean> pauseInAir = bool("PauseInAir", true);
-    private final Setting<Boolean> autoRepair = bool("AutoRepair", true);
 
-    private static final int THROWS_PER_BATCH = 6;
+    private static final int THROWS_PER_BATCH = 9;
     private static final long BATCH_INTERVAL_MS = 300;
 
     private boolean throwing;
-    private boolean keyWasDown;
     private long lastThrowMs;
 
     public AutoXPModule() {
-        super("AutoXP", "Throws XP bottles to mend your armor and tools.", Category.PLAYER);
+        super("AutoXP", "Throws XP bottles when your head is phased in a block and armor durability is low.", Category.PLAYER);
     }
 
     @Override
     public void onDisable() {
         throwing = false;
-        keyWasDown = false;
         lastThrowMs = 0;
-    }
-
-    @Override
-    public String getDisplayInfo() {
-        if (!throwing) return null;
-        if (!nullCheck() && isPaused()) return "Paused";
-        return xpNeeded() + " XP";
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (nullCheck()) return;
+        if (nullCheck() || mc.screen != null) return;
 
-        handleThrowBind();
+        OffhandModule offhand = Homovore.moduleManager.getModuleByClass(OffhandModule.class);
+        if (offhand != null && offhand.shouldDeferForEat()) return;
 
-        if (mc.screen != null) return;
+        boolean manual = !throwBind.getValue().isEmpty() && throwBind.getValue().isDown();
 
-        if (throwing) {
-            if (!isPaused()) tickThrow();
-            return;
-        }
+        if (anyArmorAtOrBelow(minDurability.getValue())) throwing = true;
+        else if (throwing && allArmorAbove(stopDurability.getValue())) throwing = false;
 
-        if (!autoRepair.getValue()) return;
-        if (xpNeeded() <= 0) return;
-        if (isPaused()) return;
+        // Holding the Throw bind forces a throw regardless of the durability
+        // auto-gate; otherwise fall back to the automatic mending behaviour.
+        if (!manual && !throwing) return;
         if (!shouldThrowNow()) return;
-        throwBottles(THROWS_PER_BATCH);
-    }
 
-    private boolean isPaused() {
-        return pauseInAir.getValue() && !mc.player.onGround();
-    }
+        Result xpBottle = InventoryUtil.find(Items.EXPERIENCE_BOTTLE, FULL_SCOPE);
+        if (xpBottle.found()) {
+            int amount = THROWS_PER_BATCH;
+            float yaw = mc.player.getYRot();
+            float pitch = 90f;
+            Homovore.rotationManager.submit(new RotationRequest(
+                "AutoXP", 40, yaw, pitch, RotationRequest.Mode.SILENT
+            ));
+            mc.gameMode.ensureHasSentCarriedItem();
 
-    private void handleThrowBind() {
-        if (mc.screen != null) {
-            keyWasDown = false;
-            return;
-        }
-        boolean down = !throwBind.getValue().isEmpty() && throwBind.getValue().isDown();
-        if (down && !keyWasDown) {
-            throwing = !throwing;
-            if (throwing) {
-                lastThrowMs = 0;
-                Command.sendMessage("{green} AutoXP mending, " + xpNeeded() + " XP required.");
-            } else {
-                Command.sendMessage("{red} AutoXP throw disabled.");
-            }
-        }
-        keyWasDown = down;
-    }
-
-    private void tickThrow() {
-        if (xpNeeded() <= 0) {
-            throwing = false;
-            Command.sendMessage("{green} AutoXP mending complete.");
-            return;
-        }
-        if (!InventoryUtil.find(Items.EXPERIENCE_BOTTLE, FULL_SCOPE).found()) {
-            throwing = false;
-            Command.sendMessage("{red} AutoXP out of XP bottles.");
-            return;
-        }
-        if (!shouldThrowNow()) return;
-        throwBottles(THROWS_PER_BATCH);
-    }
-
-    private void throwBottles(int amount) {
-        Result xp = InventoryUtil.find(Items.EXPERIENCE_BOTTLE, FULL_SCOPE);
-        if (!xp.found()) return;
-
-        float yaw = mc.player.getYRot();
-        float pitch = 90f;
-        Homovore.rotationManager.submit(new RotationRequest("AutoXP", 40, yaw, pitch, RotationRequest.Mode.SILENT));
-        mc.gameMode.ensureHasSentCarriedItem();
-        Homovore.swapManager.submit(new SwapRequest("AutoXP", 100, xp, r -> {
-            for (int i = 0; i < amount; i++) {
-                try (var handler = ((ClientLevelAccessor) mc.level).homovore$getBlockStatePredictionHandler().startPredicting()) {
-                    mc.getConnection().send(new ServerboundUseItemPacket(r.hand(), handler.currentSequence(), yaw, pitch));
+            Homovore.swapManager.submit(new SwapRequest("AutoXP", 40, xpBottle, r -> {
+                for (int i = 0; i < amount; i++) {
+                    try (var handler = ((ClientLevelAccessor) mc.level).homovore$getBlockStatePredictionHandler().startPredicting()) {
+                        mc.getConnection().send(new ServerboundUseItemPacket(r.hand(), handler.currentSequence(), yaw, pitch));
+                    }
                 }
-            }
-        }));
+            }));
+        }
     }
 
     private boolean shouldThrowNow() {
@@ -133,30 +87,29 @@ public class AutoXPModule extends Module {
         return true;
     }
 
-    private int xpNeeded() {
-        int total = 0;
-        for (ItemStack stack : gear()) total += xpForItem(stack);
-        return total;
+    private boolean anyArmorAtOrBelow(int pct) {
+        for (EquipmentSlot slot : new EquipmentSlot[]{
+                EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            ItemStack armor = mc.player.getItemBySlot(slot);
+            if (!armor.isEmpty() && armor.getMaxDamage() > 0 && EnchantmentUtil.has(Enchantments.MENDING, armor)) {
+                float durabilityPct = (float)(armor.getMaxDamage() - armor.getDamageValue()) / armor.getMaxDamage() * 100f;
+                if (durabilityPct <= pct) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
-    private int xpForItem(ItemStack stack) {
-        if (!isMendable(stack)) return 0;
-        int damage = stack.getDamageValue();
-        return damage <= 0 ? 0 : (int) Math.ceil(damage / 2.0);
-    }
-
-    private ItemStack[] gear() {
-        return new ItemStack[]{
-                mc.player.getItemBySlot(EquipmentSlot.HEAD),
-                mc.player.getItemBySlot(EquipmentSlot.CHEST),
-                mc.player.getItemBySlot(EquipmentSlot.LEGS),
-                mc.player.getItemBySlot(EquipmentSlot.FEET),
-                mc.player.getMainHandItem(),
-                mc.player.getOffhandItem()
-        };
-    }
-
-    private boolean isMendable(ItemStack stack) {
-        return !stack.isEmpty() && stack.getMaxDamage() > 0 && EnchantmentUtil.has(Enchantments.MENDING, stack);
+    private boolean allArmorAbove(int pct) {
+        for (EquipmentSlot slot : new EquipmentSlot[]{
+                EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            ItemStack armor = mc.player.getItemBySlot(slot);
+            if (!armor.isEmpty() && armor.getMaxDamage() > 0 && EnchantmentUtil.has(Enchantments.MENDING, armor)) {
+                float durabilityPct = (float)(armor.getMaxDamage() - armor.getDamageValue()) / armor.getMaxDamage() * 100f;
+                if (durabilityPct <= pct) return false;
+            }
+        }
+        return true;
     }
 }
