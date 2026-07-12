@@ -172,12 +172,15 @@ public class BreakIndicatorsModule extends Module {
         Iterator<Map.Entry<BlockPos, BreakEntry>> iterator = breaks.entrySet().iterator();
         while (iterator.hasNext()) {
             BreakEntry entry = iterator.next().getValue();
+            BlockState state = mc.level.getBlockState(entry.pos);
+            if (state.isAir()) {
+                iterator.remove();
+                continue;
+            }
             // Held rebreak markers persist until a new mine from that player (cleared in onPacket).
             if (entry.held) continue;
 
-            BlockState state = mc.level.getBlockState(entry.pos);
-            boolean finished = state.isAir()
-                    || entry.progress(now) > removeCompletionAmount.getValue()
+            boolean finished = entry.progress(now) > removeCompletionAmount.getValue()
                     || !InteractionUtil.canBreak(entry.pos, state);
             if (finished) {
                 if (holdRebreak.getValue()) {

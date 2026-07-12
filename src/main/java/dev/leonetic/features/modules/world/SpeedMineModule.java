@@ -410,6 +410,7 @@ public class SpeedMineModule extends Module {
 
         if (rebreakHoldTicks > 0 && rebreakBlock.blockPos.equals(rebreakHoldPos)) return false;
 
+        if (!rebreakBlock.beenAir && rebreakBlock.getBreakProgress() < 1.0) return false;
         if (!rebreakBlock.isReady()) return false;
 
         if (!inBreakRange(rebreakBlock.blockPos)) {
@@ -797,7 +798,9 @@ public class SpeedMineModule extends Module {
 
         void tryBreak() {
             sendAction(ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, blockPos, direction);
-            sendAction(ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, blockPos, direction);
+            if (beenAir) {
+                sendAction(ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, blockPos, direction);
+            }
         }
 
         void cancelBreaking() {

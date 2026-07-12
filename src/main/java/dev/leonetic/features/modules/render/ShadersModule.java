@@ -47,6 +47,7 @@ public class ShadersModule extends Module {
 
     public Setting<Color> playerColor     = color("PlayerOutline",     255, 0,   0,   255).setPage("Colors");
     public Setting<Color> friendColor     = color("FriendOutline",     0,   255, 100, 255).setPage("Colors");
+    public Setting<Color> enemyColor      = color("EnemyOutline",      255, 60,  60,  255).setPage("Colors");
     public Setting<Color> monsterColor    = color("MonsterOutline",    200, 60,  60,  255).setPage("Colors");
     public Setting<Color> animalColor     = color("AnimalOutline",     255, 200, 60,  255).setPage("Colors");
     public Setting<Color> itemColor       = color("ItemOutline",       255, 255, 255, 255).setPage("Colors");
@@ -187,6 +188,7 @@ public class ShadersModule extends Module {
 
     private Color colorFor(Entity entity) {
         if (entity instanceof AbstractClientPlayer p && !(entity instanceof LocalPlayer)) {
+            if (Homovore.enemyManager.isEnemy(p)) return enemyColor.getValue();
             return Homovore.friendManager.isFriend(p) ? friendColor.getValue() : playerColor.getValue();
         }
         if (entity instanceof Monster) return monsterColor.getValue();
