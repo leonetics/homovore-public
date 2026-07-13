@@ -1,5 +1,6 @@
 package dev.leonetic.manager;
 
+import dev.leonetic.event.impl.network.DisconnectEvent;
 import dev.leonetic.event.impl.network.PacketEvent;
 import dev.leonetic.event.system.Subscribe;
 import dev.leonetic.features.Feature;
@@ -13,6 +14,13 @@ public class TPSCounterService extends Feature {
 
     public void init() {
         EVENT_BUS.register(this);
+    }
+
+    @Subscribe
+    public void onDisconnect(DisconnectEvent event) {
+        nextIndex = 0;
+        countTick = 0;
+        lastTimeUpdate = -1;
     }
 
     @Subscribe

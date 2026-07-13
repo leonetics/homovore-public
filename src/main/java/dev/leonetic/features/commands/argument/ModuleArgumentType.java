@@ -18,7 +18,8 @@ public record ModuleArgumentType(boolean fullName) implements ArgumentType<Modul
         String value = reader.readString().toLowerCase();
 
         for (Module module : Homovore.moduleManager.getModules()) {
-            if (value.equalsIgnoreCase(module.getName()) || module.getName().startsWith(value)) {
+            String name = module.getName().toLowerCase();
+            if (name.equals(value) || (!fullName && name.startsWith(value))) {
                 return module;
             }
         }

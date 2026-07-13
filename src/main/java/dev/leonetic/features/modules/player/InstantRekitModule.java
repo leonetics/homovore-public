@@ -105,6 +105,7 @@ public class InstantRekitModule extends Module {
         int containerCount = Math.max(0, menu.slots.size() - 36);
         Usage usage = new Usage(menu, containerCount);
         List<Move> moves = new ArrayList<>();
+        Map<Integer, ItemStack> freshlyPlaced = new HashMap<>();
 
         for (Map.Entry<Integer, String> entry : kit.entrySet()) {
             int target = entry.getKey();
@@ -116,6 +117,7 @@ public class InstantRekitModule extends Module {
 
             int src = usage.bestSource(want);
             if (src == -1) continue;
+            freshlyPlaced.put(target, menu.getSlot(src).getItem());
             moves.add(new Move(src, target, false));
             usage.consumeAll(src);
         }
@@ -126,7 +128,7 @@ public class InstantRekitModule extends Module {
                 Item want = item(entry.getValue());
                 if (want == null) continue;
 
-                ItemStack cur = mc.player.getInventory().getItem(target);
+                ItemStack cur = freshlyPlaced.getOrDefault(target, mc.player.getInventory().getItem(target));
                 if (cur.isEmpty() || cur.getItem() != want || !cur.isStackable()) continue;
                 int need = cur.getMaxStackSize() - cur.getCount();
                 if (need <= 0) continue;

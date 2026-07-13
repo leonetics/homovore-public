@@ -194,7 +194,7 @@ public class ModuleManager implements Jsonable, Util {
 
     public void onKeyPressed(int key) {
         if (key <= 0 || mc.screen != null) return;
-        stream().filter(module -> module.getBind().getKey() == key).forEach(module -> {
+        stream().filter(module -> !(module instanceof ClickGuiModule) && module.getBind().getKey() == key).forEach(module -> {
             if (module.getBindMode() == Module.BindMode.HOLD) {
                 if (!module.isEnabled()) module.enable();
             } else {

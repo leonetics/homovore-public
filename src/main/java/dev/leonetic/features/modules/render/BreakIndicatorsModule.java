@@ -97,11 +97,22 @@ public class BreakIndicatorsModule extends Module {
         if (!(event.getPacket() instanceof ClientboundBlockDestructionPacket packet)) return;
 
         BlockPos pos = packet.getPos().immutable();
+        int id = packet.getId();
+        int progress = packet.getProgress();
+
+        if (progress < 0 || progress > 9) {
+            BreakEntry existing = breaks.get(pos);
+            if (existing != null && !existing.held && existing.entityId == id
+                    && !mc.level.getBlockState(pos).isAir()) {
+                breaks.remove(pos);
+            }
+            return;
+        }
+
         BlockState state = mc.level.getBlockState(pos);
         if (!InteractionUtil.canBreak(pos, state)) return;
 
-        Entity entity = mc.level.getEntity(packet.getId());
-        int id = packet.getId();
+        Entity entity = mc.level.getEntity(id);
         long now = System.currentTimeMillis();
 
         // A new mine from this player clears their held rebreak markers.

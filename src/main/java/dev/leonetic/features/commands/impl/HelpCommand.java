@@ -15,6 +15,7 @@ import java.util.StringJoiner;
 import static dev.leonetic.features.commands.argument.CommandArgumentType.command;
 import static dev.leonetic.features.commands.argument.CommandArgumentType.getCommand;
 import static dev.leonetic.features.commands.argument.NumberArgumentType.get;
+import static dev.leonetic.features.commands.argument.NumberArgumentType.minMax;
 import static dev.leonetic.features.commands.argument.NumberArgumentType.number;
 
 public class HelpCommand extends Command {
@@ -27,7 +28,7 @@ public class HelpCommand extends Command {
 
     @Override
     public void createArgumentBuilder(LiteralArgumentBuilder<CommandManager> builder) {
-        builder.then(argument("page", number(Integer.class))
+        builder.then(argument("page", number(Integer.class, minMax(1, Integer.MAX_VALUE)))
                         .executes((ctx) -> helpCommands(ctx, get(Integer.class, ctx, "page")))
                 .then(argument("command_name", command())
                         .executes(this::helpSpecific))
