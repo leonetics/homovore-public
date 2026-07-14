@@ -4,6 +4,8 @@
   "package": "dev.leonetic.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "item.CooldownInstanceAccessor",
+    "item.ItemCooldownsAccessor",
     "network.ConnectionAccessor",
     "network.MixinClientConnection"
   ],
