@@ -537,7 +537,7 @@ public class SpeedMineModule extends Module {
 
         private double getBreakProgress(double gameTick) {
             BlockState state = mc.level.getBlockState(blockPos);
-            Result result = findFastestTool(state, true);
+            Result result = findFastestTool(state, false);
             int slot = result.found() ? result.slot() : InventoryUtil.selected();
             ItemStack stack = mc.player.getInventory().getItem(slot);
             boolean onGround = ((EntityRotationAccessor) mc.player).homovore$getLastOnGround()

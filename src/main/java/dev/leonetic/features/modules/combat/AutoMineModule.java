@@ -47,6 +47,7 @@ public class AutoMineModule extends Module {
     private final Setting<AntiSurroundMode> antiSurroundMode = mode("AntiSurroundMode", AntiSurroundMode.Auto);
     private final Setting<Boolean> antiSurroundInnerSnap = bool("AntiSurroundInnerSnap", true);
     private final Setting<Boolean> antiSurroundOuterSnap = bool("AntiSurroundOuterSnap", true);
+    private final Setting<Boolean> avoidPistonCrystal = bool("AvoidPistonCrystal", true);
     private final Setting<Boolean> glassPush = bool("GlassPush", false);
     private final Setting<Integer> glassAttempts = num("GlassAttempts", 2, 1, 5);
     private final Setting<Boolean> glassRender = bool("GlassRender", true).setPage("Render");
@@ -759,7 +760,15 @@ public class AutoMineModule extends Module {
     }
 
     private boolean canBreak(BlockPos pos, BlockState state) {
-        return InteractionUtil.canBreak(pos, state);
+        if (!InteractionUtil.canBreak(pos, state)) return false;
+        return !isOwnPistonCrystalBlock(pos);
+    }
+
+    private boolean isOwnPistonCrystalBlock(BlockPos pos) {
+        if (!avoidPistonCrystal.getValue()) return false;
+
+        PistonCrystalModule pistonCrystal = Homovore.moduleManager.getModuleByClass(PistonCrystalModule.class);
+        return pistonCrystal != null && pistonCrystal.isOwnPistonBlock(pos);
     }
 
     private static Iterable<BlockPos> iterate(AABB box) {

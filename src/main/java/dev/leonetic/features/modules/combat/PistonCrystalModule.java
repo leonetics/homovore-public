@@ -62,7 +62,10 @@ public class PistonCrystalModule extends Module {
     private final Setting<Color>   fillColor   = color("FillColor",  0, 62, 122, 148).setPage("Render");
     private final Setting<Color>   outlineColor = color("OutlineColor", 0, 62, 122, 148).setPage("Render");
 
+    private static final int CONTRAPTION_PROTECT_TICKS = 60;
+
     private final Map<BlockPos, Integer> renderMap = new HashMap<>();
+    private final Map<BlockPos, Integer> placedContraption = new HashMap<>();
 
     private Setup   pending;
     private Setup   active;
@@ -100,6 +103,7 @@ public class PistonCrystalModule extends Module {
         waitTicks  = 0;
         lastDamage = 0;
         renderMap.clear();
+        placedContraption.clear();
     }
 
     @Subscribe
@@ -112,6 +116,7 @@ public class PistonCrystalModule extends Module {
         int fadeTicks = (int)(fadeTime.getValue() * 20);
         int now = mc.player.tickCount;
         renderMap.entrySet().removeIf(e -> now - e.getValue() > fadeTicks);
+        placedContraption.entrySet().removeIf(e -> now - e.getValue() > CONTRAPTION_PROTECT_TICKS);
 
         if (active != null) {
             tickActive();
@@ -184,12 +189,33 @@ public class PistonCrystalModule extends Module {
         if (setup.placeRedstone()) renderMap.put(setup.redstone(), tick);
         renderMap.put(setup.crystal(),                          tick);
 
+        placedContraption.put(setup.piston(), tick);
+        if (setup.placeRedstone()) placedContraption.put(setup.redstone(), tick);
+
         Homovore.rotationManager.cancel(ROTATION_ID);
         pending    = null;
         rotateHeld = 0;
         active     = setup;
         waitTicks  = 0;
         delayTicks = 0;
+    }
+
+    public boolean isOwnPistonBlock(BlockPos pos) {
+        if (pos == null || isDisabled()) return false;
+
+        Integer placedTick = placedContraption.get(pos);
+        if (placedTick != null && mc.player != null
+                && mc.player.tickCount - placedTick <= CONTRAPTION_PROTECT_TICKS) {
+            return true;
+        }
+
+        return matchesContraption(active, pos) || matchesContraption(pending, pos);
+    }
+
+    private boolean matchesContraption(Setup setup, BlockPos pos) {
+        if (setup == null) return false;
+        return pos.equals(setup.piston())
+                || (setup.placeRedstone() && pos.equals(setup.redstone()));
     }
 
     private void placeCrystal(BlockPos base, int slot) {
