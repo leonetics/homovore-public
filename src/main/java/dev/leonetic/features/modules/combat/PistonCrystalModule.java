@@ -65,7 +65,7 @@ public class PistonCrystalModule extends Module {
 
     public PistonCrystalModule() {
         super("PistonCrystal",
-              "Pushes a crystal into a surrounded target with a same-tick piston activation.",
+              "piss crystal",
               Category.COMBAT);
     }
 
