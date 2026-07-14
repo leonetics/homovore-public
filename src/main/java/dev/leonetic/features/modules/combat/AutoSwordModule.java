@@ -51,6 +51,12 @@ public class AutoSwordModule extends Module {
     private final Setting<Boolean> strict = bool("Strict", true)
             .setVisibility(v -> criticals.getValue()).setPage("General");
 
+    private final Setting<Boolean> macePriority = bool("MacePriority", true).setPage("Mace");
+    private final Setting<Boolean> onlySmash = bool("OnlySmash", true)
+            .setVisibility(v -> macePriority.getValue()).setPage("Mace");
+    private final Setting<Float> minSmashDist = num("MinSmashDist", 3.0f, 1.5f, 30.0f)
+            .setVisibility(v -> macePriority.getValue()).setPage("Mace");
+
     private final Setting<Boolean> render = bool("Render", true).setPage("Render");
     private final Setting<Float> fadeTime = num("FadeTime", 0.2f, 0.05f, 2.0f).setPage("Render");
     private final Setting<Color> sideColor = color("SideColor", 130, 80, 255, 45).setPage("Render");
@@ -142,6 +148,7 @@ public class AutoSwordModule extends Module {
 
         try {
             if (needSwap) {
+                mc.player.getInventory().setSelectedSlot(weaponSlot);
                 mc.getConnection().send(new ServerboundSetCarriedItemPacket(weaponSlot));
             }
 
@@ -155,11 +162,11 @@ public class AutoSwordModule extends Module {
 
             mc.gameMode.attack(mc.player, currentTarget);
             if (swing.getValue()) mc.player.swing(InteractionHand.MAIN_HAND);
-
+        } finally {
             if (needSwap) {
+                mc.player.getInventory().setSelectedSlot(originalSlot);
                 mc.getConnection().send(new ServerboundSetCarriedItemPacket(originalSlot));
             }
-        } finally {
             if (handle != null) Homovore.swapManager.release(handle);
         }
 
@@ -205,10 +212,19 @@ public class AutoSwordModule extends Module {
                 new Color(lc.getRed(), lc.getGreen(), lc.getBlue(), Mth.clamp((int) (lc.getAlpha() * (1 - t)), 0, 255)), 1.5f);
     }
 
+    @Override
+    public String getDisplayInfo() {
+        if (mc.player == null) return null;
+        if (macePriority.getValue() && mc.player.fallDistance > 0.1f) {
+            return String.format("Fall: %.1fm", mc.player.fallDistance);
+        }
+        return null;
+    }
+
     public boolean isMaceAttackReady() {
         if (mc.player == null) return false;
 
-        if (!MaceItem.canSmashAttack(mc.player)) return false;
+        if (!MaceItem.canSmashAttack(mc.player) || mc.player.fallDistance < minSmashDist.getValue()) return false;
         for (int slot = 0; slot < 9; slot++) {
             if (mc.player.getInventory().getItem(slot).getItem() instanceof MaceItem) return true;
         }
@@ -269,6 +285,7 @@ public class AutoSwordModule extends Module {
         double bestDist = Double.MAX_VALUE;
 
         for (Entity entity : mc.level.getEntities(null, mc.player.getBoundingBox().inflate(RANGE + 1))) {
+            if (entity == mc.player) continue;
             if (!targets.isValidTarget(entity)) continue;
 
             double dist = eyePos.distanceTo(clampToBox(eyePos, entity.getBoundingBox()));
@@ -324,6 +341,16 @@ public class AutoSwordModule extends Module {
             attackDamage += EnchantmentUtil.getLevel(Enchantments.SMITE, held) * 2.5f;
             attackDamage += EnchantmentUtil.getLevel(Enchantments.BANE_OF_ARTHROPODS, held) * 2.5f;
 
+            if (isMace) {
+                boolean canSmash = MaceItem.canSmashAttack(mc.player) && mc.player.fallDistance >= minSmashDist.getValue();
+                if (canSmash) {
+                    if (macePriority.getValue()) attackDamage += 1000f; // Force selection
+                    attackDamage += getSmashDamageBonus(held, (float) mc.player.fallDistance);
+                } else if (macePriority.getValue() && onlySmash.getValue()) {
+                    continue; // Skip this weapon if we can't smash and OnlySmash is enabled
+                }
+            }
+
             if (attackDamage > bestDamage) {
                 bestDamage = attackDamage;
                 bestSlot = slot;
@@ -361,5 +388,14 @@ public class AutoSwordModule extends Module {
         float h = -(float) Math.cos(-pitch * 0.017453292F);
         float i = (float) Math.sin(-pitch * 0.017453292F);
         return new Vec3(g * h, i, f * h);
+    }
+
+    private float getSmashDamageBonus(ItemStack mace, float fallDistance) {
+        float bonus = 0f;
+        if (fallDistance <= 3f) bonus = fallDistance * 3f;
+        else if (fallDistance <= 8f) bonus = 9f + (fallDistance - 3f) * 1.5f;
+        else bonus = 9f + 7.5f + (fallDistance - 8f) * 0.5f;
+        int density = EnchantmentUtil.getLevel(Enchantments.DENSITY, mace);
+        return bonus + (density * fallDistance);
     }
 }
