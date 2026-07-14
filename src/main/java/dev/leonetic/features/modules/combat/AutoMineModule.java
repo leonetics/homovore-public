@@ -68,6 +68,8 @@ public class AutoMineModule extends Module {
     private int crawlHitboxCells;
     private float crawlRebreakDamage;
     private String crawlDecision = "idle";
+    private BlockPos finishingStandingDelayed;
+    private BlockPos finishingStandingRebreak;
     private int lastDebugTick = -1;
     private BlockPos glassTargetPos;
     private int glassUsedAttempts;
@@ -106,6 +108,7 @@ public class AutoMineModule extends Module {
         crawlHitboxCells = 0;
         crawlRebreakDamage = 0.0f;
         crawlDecision = "disabled";
+        clearFinishingStandingMines();
         resetGlass();
         glassRenderPos = null;
     }
@@ -140,6 +143,8 @@ public class AutoMineModule extends Module {
         speedMine = Homovore.moduleManager.getModuleByClass(SpeedMineModule.class);
         if (speedMine == null || !speedMine.isEnabled()) return;
 
+        Player previousTarget = targetPlayer;
+        boolean wasCrawlTargeting = crawlTargeting;
         targetPlayer = selectTarget();
         if (targetPlayer == null) {
             crawlTargeting = false;
@@ -147,15 +152,26 @@ public class AutoMineModule extends Module {
             crawlHitboxCells = 0;
             crawlRebreakDamage = 0.0f;
             crawlDecision = "no_target";
+            clearFinishingStandingMines();
             return;
         }
 
         handleGlassPush();
 
+        boolean enteringCrawl = previousTarget == targetPlayer
+                && !wasCrawlTargeting
+                && targetPlayer.isVisuallyCrawling();
+        if (enteringCrawl) captureFinishingStandingMines();
+
         if (updateCrawlTargets()) {
+            if (waitingForStandingMines()) {
+                crawlDecision = "finishing_standing_pair";
+                return;
+            }
             requestCrawlTargets();
             return;
         }
+        clearFinishingStandingMines();
         crawlTargeting = false;
         crawlPhasedCells = 0;
         crawlHitboxCells = 0;
@@ -173,6 +189,37 @@ public class AutoMineModule extends Module {
 
         findTargetBlocks();
         requestSelectedTargets();
+    }
+
+    private void captureFinishingStandingMines() {
+        if (target1 == null || target2 == null
+                || !speedMine.hasDelayedDestroy() || !speedMine.hasRebreakBlock()) return;
+
+        BlockPos delayed = speedMine.getDelayedDestroyBlockPos();
+        BlockPos rebreak = speedMine.getRebreakBlockPos();
+        boolean delayedSelected = target1.blockPos.equals(delayed) || target2.blockPos.equals(delayed);
+        boolean rebreakSelected = target1.blockPos.equals(rebreak) || target2.blockPos.equals(rebreak);
+        if (!delayedSelected || !rebreakSelected) return;
+
+        finishingStandingDelayed = delayed.immutable();
+        finishingStandingRebreak = rebreak.immutable();
+    }
+
+    private boolean waitingForStandingMines() {
+        if (finishingStandingDelayed == null || finishingStandingRebreak == null) return false;
+
+        boolean delayedFinished = !finishingStandingDelayed.equals(speedMine.getDelayedDestroyBlockPos());
+        boolean rebreakFinished = !finishingStandingRebreak.equals(speedMine.getRebreakBlockPos())
+                || speedMine.canRebreakRebreakBlock();
+        if (!delayedFinished || !rebreakFinished) return true;
+
+        clearFinishingStandingMines();
+        return false;
+    }
+
+    private void clearFinishingStandingMines() {
+        finishingStandingDelayed = null;
+        finishingStandingRebreak = null;
     }
 
     private void requestSelectedTargets() {

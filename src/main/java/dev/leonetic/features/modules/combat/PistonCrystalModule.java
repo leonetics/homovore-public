@@ -8,7 +8,6 @@ import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.modules.client.TargetsModule;
 import dev.leonetic.features.settings.Setting;
 import dev.leonetic.manager.RotationRequest;
-import dev.leonetic.util.MathUtil;
 import dev.leonetic.util.PlaceUtil;
 import dev.leonetic.util.inventory.InventoryUtil;
 import dev.leonetic.util.inventory.ResultType;
@@ -27,10 +26,8 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -45,14 +42,8 @@ public class PistonCrystalModule extends Module {
     private static final int    ROTATION_PRIORITY = 70;
     private static final double TARGET_RANGE     = 10.0;
     private static final double TARGET_RANGE_SQ  = TARGET_RANGE * TARGET_RANGE;
-    private static final int    EXTEND_TIMEOUT   = 10;
-
-    private static final double NUDGE = 1.0 / 16.0;
-
     private final Setting<Double>  placeRange   = num("PlaceRange",   6.0, 1.0, 6.0).setPage("General");
-    private final Setting<Double>  breakRange   = num("BreakRange",   3.0, 1.0, 6.0).setPage("General");
     private final Setting<Double>  minDamage    = num("MinDamage",    6.0, 0.0, 36.0).setPage("General");
-    private final Setting<Integer> delay        = num("Delay",       10, 0, 20).setPage("General");
     private final Setting<Boolean> offhandPlace = bool("OffhandPlace", true).setPage("General");
     private final Setting<Boolean> autoBase     = bool("AutoBase",   true).setPage("General");
     private final Setting<Boolean> ignoreItems  = bool("IgnoreItems", true).setPage("General");
@@ -67,11 +58,6 @@ public class PistonCrystalModule extends Module {
     private final Map<BlockPos, Integer> renderMap = new HashMap<>();
     private final Map<BlockPos, Integer> placedContraption = new HashMap<>();
 
-    private Setup   pending;
-    private Setup   active;
-    private int     delayTicks;
-    private int     rotateHeld;
-    private int     waitTicks;
     private float   lastDamage;
 
     private ArmorProfile                     targetProfile;
@@ -79,14 +65,13 @@ public class PistonCrystalModule extends Module {
 
     public PistonCrystalModule() {
         super("PistonCrystal",
-              "Pushes a crystal over a surrounded target with a piston and explodes it.",
+              "Pushes a crystal into a surrounded target with a same-tick piston activation.",
               Category.COMBAT);
     }
 
     @Override
     public void onEnable() {
         resetState();
-        delayTicks = delay.getValue();
     }
 
     @Override
@@ -96,11 +81,6 @@ public class PistonCrystalModule extends Module {
     }
 
     private void resetState() {
-        pending    = null;
-        active     = null;
-        delayTicks = 0;
-        rotateHeld = 0;
-        waitTicks  = 0;
         lastDamage = 0;
         renderMap.clear();
         placedContraption.clear();
@@ -118,53 +98,24 @@ public class PistonCrystalModule extends Module {
         renderMap.entrySet().removeIf(e -> now - e.getValue() > fadeTicks);
         placedContraption.entrySet().removeIf(e -> now - e.getValue() > CONTRAPTION_PROTECT_TICKS);
 
-        if (active != null) {
-            tickActive();
-            return;
-        }
-
-        if (delayTicks < delay.getValue()) {
-            delayTicks++;
-            return;
-        }
-
         int pistonSlot   = pistonSlot();
         int redstoneSlot = hotbarSlotOf(Items.REDSTONE_BLOCK);
         int crystalSlot  = hotbarSlotOf(Items.END_CRYSTAL);
-        if (pistonSlot < 0 || redstoneSlot < 0 || crystalSlot < 0) {
-            clearPending();
+        if (pistonSlot < 0 || crystalSlot < 0) {
             lastDamage = 0;
             return;
         }
 
-        Setup setup = findSetup(pistonSlot, redstoneSlot, crystalSlot);
-        if (setup == null) {
-            clearPending();
-            return;
-        }
+        Setup setup = findSetup();
+        if (setup == null) return;
+        if (setup.placeRedstone() && redstoneSlot < 0) return;
 
-        if (clearCrystalSpot(setup.crystal())) return;
-
-        if (pending == null || pending.dir() != setup.dir()) rotateHeld = 0;
-        pending = setup;
-        Homovore.rotationManager.submit(new RotationRequest(
+        if (!Homovore.rotationManager.submit(new RotationRequest(
                 ROTATION_ID, ROTATION_PRIORITY,
                 setup.dir().toYRot(), 0f,
-                RotationRequest.Mode.MOTION, true, false));
-        if (Homovore.rotationManager.isCompleted(ROTATION_ID)) rotateHeld++;
-        else rotateHeld = 0;
-        if (rotateHeld < 2) return;
+                RotationRequest.Mode.SILENT))) return;
 
         place(setup, pistonSlot, redstoneSlot, crystalSlot);
-    }
-
-    private void clearPending() {
-        if (pending != null) {
-            Homovore.rotationManager.cancel(ROTATION_ID);
-            pending = null;
-        }
-        rotateHeld = 0;
-        lastDamage = 0;
     }
 
     private void place(Setup setup, int pistonSlot, int redstoneSlot, int crystalSlot) {
@@ -177,27 +128,21 @@ public class PistonCrystalModule extends Module {
         if (setup.placeBase()
                 && !Homovore.placementManager.placeDirect(setup.base(), setup.baseFace(), obsidianSlot))
             return;
-        if (!Homovore.placementManager.placeDirect(setup.piston(), setup.pistonFace(), pistonSlot))
-            return;
-        if (setup.placeRedstone())
-            Homovore.placementManager.placeDirect(setup.redstone(), setup.redstoneFace(), redstoneSlot);
-        placeCrystal(setup.base(), crystalSlot);
-
         int tick = mc.player.tickCount;
-        if (setup.placeBase())   renderMap.put(setup.base(),    tick);
-        renderMap.put(setup.piston(),                           tick);
-        if (setup.placeRedstone()) renderMap.put(setup.redstone(), tick);
-        renderMap.put(setup.crystal(),                          tick);
+        if (setup.placeBase()) renderMap.put(setup.base(), tick);
 
+        if (!Homovore.placementManager.placeDirect(setup.piston(), setup.pistonFace(), pistonSlot)) return;
+        renderMap.put(setup.piston(), tick);
         placedContraption.put(setup.piston(), tick);
-        if (setup.placeRedstone()) placedContraption.put(setup.redstone(), tick);
 
-        Homovore.rotationManager.cancel(ROTATION_ID);
-        pending    = null;
-        rotateHeld = 0;
-        active     = setup;
-        waitTicks  = 0;
-        delayTicks = 0;
+        if (setup.placeRedstone()) {
+            if (!Homovore.placementManager.placeDirect(setup.redstone(), setup.redstoneFace(), redstoneSlot)) return;
+            renderMap.put(setup.redstone(), tick);
+            placedContraption.put(setup.redstone(), tick);
+        }
+
+        if (!placeCrystal(setup.base(), crystalSlot)) return;
+        renderMap.put(setup.crystal(), tick);
     }
 
     public boolean isOwnPistonBlock(BlockPos pos) {
@@ -209,89 +154,17 @@ public class PistonCrystalModule extends Module {
             return true;
         }
 
-        return matchesContraption(active, pos) || matchesContraption(pending, pos);
+        return false;
     }
 
-    private boolean matchesContraption(Setup setup, BlockPos pos) {
-        if (setup == null) return false;
-        return pos.equals(setup.piston())
-                || (setup.placeRedstone() && pos.equals(setup.redstone()));
-    }
-
-    private void placeCrystal(BlockPos base, int slot) {
+    private boolean placeCrystal(BlockPos base, int slot) {
         if (offhandPlace.getValue()) {
-            Homovore.placementManager.placeCrystalOffhand(base, slot, true);
-        } else {
-            Homovore.placementManager.placeCrystal(base, slot, true);
+            return Homovore.placementManager.placeCrystalOffhand(base, slot, true);
         }
+        return Homovore.placementManager.placeCrystal(base, slot, true);
     }
 
-    private void tickActive() {
-        waitTicks++;
-
-        BlockState pistonState = mc.level.getBlockState(active.piston());
-        boolean extended = pistonState.hasProperty(BlockStateProperties.EXTENDED)
-                && pistonState.getValue(BlockStateProperties.EXTENDED);
-        if (!extended) {
-            extended = mc.level.getBlockState(active.crystal()).is(Blocks.PISTON_HEAD)
-                    || mc.level.getBlockState(active.crystal()).is(Blocks.MOVING_PISTON);
-        }
-
-        if (extended) {
-            breakCrystalsAround(active.head());
-            active = null;
-            return;
-        }
-
-        if (waitTicks > EXTEND_TIMEOUT) active = null;
-    }
-
-    private boolean clearCrystalSpot(BlockPos crystalPos) {
-        AABB box = new AABB(crystalPos.getX(),     crystalPos.getY(),     crystalPos.getZ(),
-                            crystalPos.getX() + 1, crystalPos.getY() + 2, crystalPos.getZ() + 1);
-        boolean blocked = false;
-        for (Entity e : mc.level.getEntities((Entity) null, box)) {
-            if (!(e instanceof EndCrystal crystal)) continue;
-            blocked = true;
-            breakCrystal(crystal);
-        }
-        return blocked;
-    }
-
-    private boolean breakCrystalsAround(BlockPos head) {
-        Vec3 eye       = mc.player.getEyePosition();
-        double rangeSq = breakRange.getValue() * breakRange.getValue();
-        AABB area      = new AABB(head).inflate(1.0);
-        boolean found  = false;
-        for (var e : mc.level.getEntities(null, area)) {
-            if (!(e instanceof EndCrystal crystal)) continue;
-            found = true;
-            if (distSqToBox(eye, crystal.getBoundingBox()) > rangeSq) continue;
-            breakCrystal(crystal);
-        }
-        return found;
-    }
-
-    private void breakCrystal(EndCrystal crystal) {
-        Vec3 eyePos = mc.player.getEyePosition(1.0f);
-        Vec3 hit    = closestPointOnBox(eyePos, crystal.getBoundingBox());
-        float[] angles = MathUtil.calcAngle(eyePos, hit);
-        if (!canHitCrystal(crystal, angles[0], angles[1])) return;
-        Homovore.rotationManager.submit(new RotationRequest(
-                "PistonCrystal_break", 60, angles[0], angles[1], RotationRequest.Mode.SILENT));
-        mc.gameMode.attack(mc.player, crystal);
-    }
-
-    private boolean canHitCrystal(EndCrystal crystal, float yaw, float pitch) {
-        AABB bb = crystal.getBoundingBox();
-        Vec3 eye = mc.player.getEyePosition(1.0f);
-        if (bb.contains(eye)) return true;
-        Vec3 look     = getLookVector(yaw, pitch);
-        Vec3 reachEnd = eye.add(look.scale(breakRange.getValue()));
-        return bb.clip(eye, reachEnd).isPresent();
-    }
-
-    private Setup findSetup(int pistonSlot, int redstoneSlot, int crystalSlot) {
+    private Setup findSetup() {
         LivingEntity target = findTarget();
         if (target == null) { lastDamage = 0; return null; }
 
@@ -346,7 +219,7 @@ public class PistonCrystalModule extends Module {
         if (!mc.level.getBlockState(head).isAir()) return null;
 
         Vec3 explosionPos = new Vec3(head.getX() + 0.5, head.getY(), head.getZ() + 0.5);
-        return buildSetup(target, head, dir, crystalPos, base, pistonPos,
+        return buildSetup(target, dir, crystalPos, base, pistonPos,
                           explosionPos, eye, range, placeBase);
     }
 
@@ -366,7 +239,7 @@ public class PistonCrystalModule extends Module {
                 : new Vec3(crystalPos.getX() + 0.5 - dir.getStepX() * 0.5,
                            crystalPos.getY(),
                            crystalPos.getZ() + 0.5 - dir.getStepZ() * 0.5);
-        return buildSetup(target, head, dir, crystalPos, base, pistonPos,
+        return buildSetup(target, dir, crystalPos, base, pistonPos,
                           explosionPos, eye, range, placeBase);
     }
 
@@ -381,10 +254,11 @@ public class PistonCrystalModule extends Module {
                 && PlaceUtil.canPlace(base);
     }
 
-    private Setup buildSetup(LivingEntity target, BlockPos head, Direction dir,
-                             BlockPos crystalPos, BlockPos base, BlockPos pistonPos,
+    private Setup buildSetup(LivingEntity target, Direction dir,
+                              BlockPos crystalPos, BlockPos base, BlockPos pistonPos,
                              Vec3 explosionPos, Vec3 eye, double range,
                              boolean placeBase) {
+        if (crystalObscuresPiston(pistonPos)) return null;
         if (!PlaceUtil.canPlace(pistonPos)) return null;
         if (ignoreItems.getValue() && itemInCrystalSpot(crystalPos)) return null;
 
@@ -395,12 +269,6 @@ public class PistonCrystalModule extends Module {
         if (eye.distanceToSqr(Vec3.atCenterOf(pistonPos)) > rangeSq) return null;
         if (eye.distanceToSqr(Vec3.atCenterOf(base))      > rangeSq) return null;
 
-        AABB crystalBox = new AABB(
-                explosionPos.x - 1, explosionPos.y,     explosionPos.z - 1,
-                explosionPos.x + 1, explosionPos.y + 2, explosionPos.z + 1);
-        double breakRangeSq = breakRange.getValue() * breakRange.getValue();
-        if (distSqToBox(eye, crystalBox) > breakRangeSq) return null;
-
         float damage = calcDamage(target, explosionPos, placeBase ? base : null);
         if (damage < minDamage.getValue()) return null;
 
@@ -409,8 +277,16 @@ public class PistonCrystalModule extends Module {
         if (redstone == null) return null;
 
         return new Setup(dir, pistonPos, pistonFace, redstone.pos(), redstone.face(),
-                         crystalPos, base, baseFace, head,
+                         crystalPos, base, baseFace,
                          redstone.place(), placeBase, damage);
+    }
+
+    private boolean crystalObscuresPiston(BlockPos pistonPos) {
+        AABB placementBox = new AABB(pistonPos);
+        return !mc.level.getEntitiesOfClass(
+                EndCrystal.class,
+                placementBox,
+                EndCrystal::isAlive).isEmpty();
     }
 
     private boolean itemInCrystalSpot(BlockPos crystalPos) {
@@ -612,40 +488,6 @@ public class PistonCrystalModule extends Module {
         return new ArmorProfile(armor, tough, resistanceMul, protPoints);
     }
 
-    private Vec3 closestPointOnBox(Vec3 eye, AABB box) {
-        boolean minX = eye.x < box.minX;
-        boolean maxX = eye.x > box.maxX;
-        boolean minZ = eye.z < box.minZ;
-        boolean maxZ = eye.z > box.maxZ;
-
-        double x = Mth.clamp(eye.x, box.minX, box.maxX);
-        double y = Mth.clamp(eye.y, box.minY, box.maxY);
-        double z = Mth.clamp(eye.z, box.minZ, box.maxZ);
-
-        if      (minX) x += NUDGE;
-        else if (maxX) x -= NUDGE;
-
-        if      (minZ) z += NUDGE;
-        else if (maxZ) z -= NUDGE;
-
-        return new Vec3(x, y, z);
-    }
-
-    private static double distSqToBox(Vec3 p, AABB box) {
-        double dx = p.x < box.minX ? box.minX - p.x : (p.x > box.maxX ? p.x - box.maxX : 0);
-        double dy = p.y < box.minY ? box.minY - p.y : (p.y > box.maxY ? p.y - box.maxY : 0);
-        double dz = p.z < box.minZ ? box.minZ - p.z : (p.z > box.maxZ ? p.z - box.maxZ : 0);
-        return dx * dx + dy * dy + dz * dz;
-    }
-
-    private Vec3 getLookVector(float yaw, float pitch) {
-        float f = (float) Math.cos(-yaw * 0.017453292F - Math.PI);
-        float g = (float) Math.sin(-yaw * 0.017453292F - Math.PI);
-        float h = -(float) Math.cos(-pitch * 0.017453292F);
-        float k = (float) Math.sin(-pitch * 0.017453292F);
-        return new Vec3(g * h, k, f * h);
-    }
-
     private int pistonSlot() {
         int s = hotbarSlotOf(Items.PISTON);
         return s >= 0 ? s : hotbarSlotOf(Items.STICKY_PISTON);
@@ -688,7 +530,6 @@ public class PistonCrystalModule extends Module {
                          BlockPos redstone, Direction redstoneFace,
                          BlockPos crystal,
                          BlockPos base,     Direction baseFace,
-                         BlockPos head,
                          boolean placeRedstone, boolean placeBase, float damage) {}
 
     private record RedstoneSpot(BlockPos pos, Direction face, boolean place) {}
