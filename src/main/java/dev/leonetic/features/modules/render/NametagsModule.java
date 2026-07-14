@@ -8,7 +8,10 @@ import dev.leonetic.features.modules.Module;
 import dev.leonetic.features.settings.Setting;
 import dev.leonetic.util.render.MatrixCapture;
 import dev.leonetic.util.traits.Jsonable;
+import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
@@ -31,6 +34,8 @@ public class NametagsModule extends Module {
     public Setting<Boolean> showArmor   = bool("ShowArmor",   true).setPage("Info");
     public Setting<Boolean> showDist    = bool("ShowDist",    true).setPage("Info");
     public Setting<Boolean> showPops    = bool("ShowPops",    true).setPage("Info");
+    public Setting<Boolean> showTurtle  = bool("ShowTurtle",  true).setPage("Info");
+    public Setting<Boolean> turtleTimer = bool("TurtleTimer", true).setPage("Info");
 
     public Setting<Color>   nameColor   = color("NameColor",   255, 255, 255, 255).setPage("Colors");
     public Setting<Color>   friendColor = color("FriendColor",   0, 255, 100, 255).setPage("Colors");
@@ -38,6 +43,7 @@ public class NametagsModule extends Module {
     public Setting<Color>   bgColor     = color("BgColor",       0,   0,   0, 128).setPage("Colors");
     public Setting<Color>   distColor   = color("DistColor",   170, 170, 170, 255).setPage("Colors");
     public Setting<Color>   popColor    = color("PopColor",   255,  80,  80, 255).setPage("Colors");
+    public Setting<Color>   turtleColor = color("TurtleColor", 90, 210, 130, 255).setPage("Colors");
 
     public Setting<Float>   gap         = num("Gap",       1.0f, 0.1f, 15.0f).setPage("Render");
     public Setting<Float>   armorGap    = num("ArmorGap",  2.0f, 0.0f, 20.0f).setPage("Render");
@@ -96,6 +102,7 @@ public class NametagsModule extends Module {
     public NametagsModule() {
         super("Nametags", "Renders custom nametags above players", Category.RENDER);
         Homovore.configManager.addConfig(pearlCacheJson);
+        turtleTimer.setVisibility(v -> showTurtle.getValue());
     }
 
     @Override
@@ -135,9 +142,15 @@ public class NametagsModule extends Module {
             ItemStack offHand  = Homovore.playerInfoManager.getOffHandItem(player);
             String name = player.getGameProfile().name();
 
+            int turtleSeconds = -1;
+            if (showTurtle.getValue() && Homovore.turtleMasterManager.hasTurtleMaster(player)) {
+                turtleSeconds = Homovore.turtleMasterManager.getRemainingSeconds(player.getUUID());
+            }
+            int turtle = turtleSeconds;
+
             jobs.add(new RenderJob(dist * dist, () ->
                     renderNametag(graphics, px, py, pz, dist,
-                            name, nameArgb, secondaryStr, pops,
+                            name, nameArgb, secondaryStr, pops, turtle,
                             armor, mainHand, offHand)));
         }
 
@@ -220,6 +233,19 @@ public class NametagsModule extends Module {
                                int totemPops,
                                Map<EquipmentSlot, ItemStack> armor,
                                ItemStack mainHand, ItemStack offHand) {
+        renderNametag(graphics, wx, wy, wz, dist, name, nameArgb, secondaryStr, totemPops, -1,
+                armor, mainHand, offHand);
+    }
+
+    public void renderNametag(GuiGraphics graphics,
+                               double wx, double wy, double wz,
+                               double dist,
+                               String name, int nameArgb,
+                               String secondaryStr,
+                               int totemPops,
+                               int turtleSeconds,
+                               Map<EquipmentSlot, ItemStack> armor,
+                               ItemStack mainHand, ItemStack offHand) {
         float[] screen = MatrixCapture.worldToScreen(wx, wy, wz);
         if (screen == null) return;
 
@@ -234,9 +260,16 @@ public class NametagsModule extends Module {
         String popsStr = (showPops.getValue() && totemPops > 0) ? " -" + totemPops : "";
         int popsW = mc.font.width(popsStr);
 
-        int totalW   = nameW + secondaryW + popsW;
-        int halfW    = totalW / 2;
         int textH    = mc.font.lineHeight;
+
+        boolean turtle = turtleSeconds >= 0;
+        int turtleIconW = turtle ? textH + 2 : 0;
+        String turtleStr = (turtle && turtleTimer.getValue() && turtleSeconds < Integer.MAX_VALUE)
+                ? " " + turtleSeconds + "s" : "";
+        int turtleStrW = mc.font.width(turtleStr);
+
+        int totalW   = turtleIconW + nameW + secondaryW + popsW + turtleStrW;
+        int halfW    = totalW / 2;
         int textTopY = -textH;
 
         graphics.pose().pushMatrix();
@@ -245,12 +278,26 @@ public class NametagsModule extends Module {
 
         graphics.fill(-halfW - 2, textTopY - 1, halfW + 2, 1, bgColor.getValue().getRGB());
 
-        graphics.drawString(mc.font, name, -halfW, textTopY, nameArgb);
-        if (!secondaryStr.isEmpty()) {
-            graphics.drawString(mc.font, secondaryStr, -halfW + nameW, textTopY, distColor.getValue().getRGB());
+        int cursorX = -halfW;
+        if (turtle) {
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                    Gui.getMobEffectSprite(MobEffects.RESISTANCE),
+                    cursorX, textTopY, textH, textH);
+            cursorX += turtleIconW;
         }
+
+        graphics.drawString(mc.font, name, cursorX, textTopY, nameArgb);
+        cursorX += nameW;
+        if (!secondaryStr.isEmpty()) {
+            graphics.drawString(mc.font, secondaryStr, cursorX, textTopY, distColor.getValue().getRGB());
+        }
+        cursorX += secondaryW;
         if (!popsStr.isEmpty()) {
-            graphics.drawString(mc.font, popsStr, -halfW + nameW + secondaryW, textTopY, popColor.getValue().getRGB());
+            graphics.drawString(mc.font, popsStr, cursorX, textTopY, popColor.getValue().getRGB());
+        }
+        cursorX += popsW;
+        if (!turtleStr.isEmpty()) {
+            graphics.drawString(mc.font, turtleStr, cursorX, textTopY, turtleColor.getValue().getRGB());
         }
 
         if (showArmor.getValue()) {

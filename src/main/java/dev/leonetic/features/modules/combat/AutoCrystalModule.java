@@ -74,6 +74,8 @@ public class AutoCrystalModule extends Module {
     private final Setting<Integer> breakDelay    = num("BreakDelay", 0, 0, 2000).setPage("General");
     private final Setting<Double>  minDamage     = num("MinDamage", 4.0, 0.0, 36.0).setPage("General");
     private final Setting<Double>  maxSelfDamage = num("MaxSelfDamage", 4.0, 0.0, 36.0).setPage("General");
+    private final Setting<Boolean> slowPlace     = bool("SlowPlace", false).setPage("General");
+    private final Setting<Double>  slowPlaceThreshold = num("SlowPlaceThreshold", 3.0, 0.0, 36.0).setPage("General");
     private final Setting<Boolean> antiSurround  = bool("AntiSurround", true).setPage("General");
     private final Setting<Integer> antiSurroundCompletion = num("AntiSurroundCompletion", 70, 0, 100).setPage("General");
 
@@ -119,8 +121,11 @@ public class AutoCrystalModule extends Module {
 
     private static final long CRYSTAL_TRACK_MS = 1750;
 
+    private static final long SLOW_PLACE_INTERVAL_MS = 500;
+
     private final Timer placeTimer  = new Timer();
     private final Timer breakTimer  = new Timer();
+    private final Timer slowPlaceTimer = new Timer();
 
     private final Long2LongOpenHashMap crystalPlaces = new Long2LongOpenHashMap();
 
@@ -161,6 +166,7 @@ public class AutoCrystalModule extends Module {
     public AutoCrystalModule() {
         super("AutoCrystal", "Automatically places and breaks end crystals.", Category.COMBAT);
         placeDelay.setVisibility(v -> place.getValue());
+        slowPlaceThreshold.setVisibility(v -> slowPlace.getValue());
         breakDelay.setVisibility(v -> doBreak.getValue());
         basePlaceTargetRange.setVisibility(v -> basePlace.getValue());
         basePlaceMinDamage.setVisibility(v -> basePlace.getValue());
@@ -175,6 +181,7 @@ public class AutoCrystalModule extends Module {
         instantAttacks.clear();
         placeTimer.reset();
         breakTimer.reset();
+        slowPlaceTimer.reset();
         lastBestDamage = 0;
         lastCalcMs = 0;
         lastReactorPlaceTick = -1;
@@ -420,9 +427,11 @@ public class AutoCrystalModule extends Module {
         if (nowNanos - sentNanos > REACTIVE_REPLACE_WINDOW_NS) return;
         if (!placeTimer.passedMs(placeDelay.getValue())) return;
         if (!isDesirablePlacement(airPos)) return;
+        if (isSlowPlaceThrottled(target.damage)) return;
         if (doPlace(target, false, true)) {
             diagReactivePlace++;
             placeTimer.reset();
+            recordSlowPlace(target.damage);
         }
     }
 
@@ -463,6 +472,7 @@ public class AutoCrystalModule extends Module {
         PlaceTarget placeTarget = findBestPlace(potentialTargets);
         if (placeTarget != null && doPlace(placeTarget)) {
             placeTimer.reset();
+            recordSlowPlace(placeTarget.damage);
         }
     }
 
@@ -553,11 +563,13 @@ public class AutoCrystalModule extends Module {
                 Homovore.placementManager.flushQueue();
                 if (canPlace && doPlace(new PlaceTarget(baseTarget.base, baseTarget.damage), true)) {
                     placeTimer.reset();
+                    recordSlowPlace(baseTarget.damage);
                     placed = true;
                 }
             }
         } else if (crystalTarget != null && doPlace(crystalTarget)) {
             placeTimer.reset();
+            recordSlowPlace(crystalTarget.damage);
             placed = true;
         }
 
@@ -648,6 +660,7 @@ public class AutoCrystalModule extends Module {
                     }
                     if (!anyTarget) continue;
                     if (totalDmg < baseMin) continue;
+                    if (isSlowPlaceThrottled(totalDmg)) continue;
 
                     if (totalDmg > layerDmg) {
                         layerDmg  = totalDmg;
@@ -848,9 +861,22 @@ public class AutoCrystalModule extends Module {
                 anyTarget = true;
             }
             if (!anyTarget) continue;
+            if (isSlowPlaceThrottled(totalDmg)) continue;
             if (best == null || totalDmg > best.damage) best = new PlaceTarget(c.base, totalDmg);
         }
         return best;
+    }
+
+    private boolean isSlowPlaceThrottled(float damage) {
+        return slowPlace.getValue()
+                && damage <= slowPlaceThreshold.getValue()
+                && !slowPlaceTimer.passedMs(SLOW_PLACE_INTERVAL_MS);
+    }
+
+    private void recordSlowPlace(float damage) {
+        if (slowPlace.getValue() && damage <= slowPlaceThreshold.getValue()) {
+            slowPlaceTimer.reset();
+        }
     }
 
     private boolean isBurrowBlock(BlockState state) {

@@ -27,6 +27,7 @@ public class Homovore implements ModInitializer, ClientModInitializer {
     public static FriendManager friendManager;
     public static EnemyManager enemyManager;
     public static PlayerInfoManager playerInfoManager;
+    public static TurtleMasterManager turtleMasterManager;
     public static ModuleManager moduleManager;
     public static ConfigManager configManager;
     public static PlacementManager placementManager;
@@ -46,6 +47,7 @@ public class Homovore implements ModInitializer, ClientModInitializer {
         friendManager = new FriendManager();
         enemyManager = new EnemyManager();
         playerInfoManager = new PlayerInfoManager();
+        turtleMasterManager = new TurtleMasterManager();
         colorManager = new ColorManager();
         commandManager = new CommandManager();
         moduleManager = new ModuleManager();
@@ -73,6 +75,7 @@ public class Homovore implements ModInitializer, ClientModInitializer {
         friendManager.init();
         enemyManager.init();
         playerInfoManager.init();
+        turtleMasterManager.init();
         tpsCounterService.init();
         guiMove.init();
 
