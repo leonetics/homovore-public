@@ -20,17 +20,14 @@ import dev.leonetic.util.inventory.Result;
 import dev.leonetic.util.inventory.ResultType;
 import dev.leonetic.util.render.RenderUtil;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -67,9 +64,6 @@ public class SpeedMineModule extends Module {
     private boolean needDelayedDestroySwapBack;
     private Result delayedDestroySwapResult;
     private SwapManager.SwapHandle delayedDestroySwapHandle;
-    private Result eatingBorrowResult;
-    private int eatingBorrowSlot = -1;
-    private boolean eatingBorrowed;
     private BlockPos rebreakHoldPos;
     private int rebreakHoldTicks;
 
@@ -93,7 +87,6 @@ public class SpeedMineModule extends Module {
         if (rebreakBlock != null) rebreakBlock.cancelBreaking();
         if (delayedDestroyBlock != null) delayedDestroyBlock.cancelBreaking();
         endDelayedDestroySwap();
-        restoreEatingBorrow();
         rebreakBlock = null;
         delayedDestroyBlock = null;
         lastDelayedDestroyBlockPos = null;
@@ -102,8 +95,6 @@ public class SpeedMineModule extends Module {
     @Subscribe
     private void onTick(PreTickEvent event) {
         if (nullCheck()) return;
-        boolean restoredEatingBorrow = restoreEatingBorrow();
-        boolean eatingMainhand = isEatingMainhand();
         currentGameTickCalculated = gameTick();
 
         lastDelayedDestroyBlockPos = hasDelayedDestroy() ? delayedDestroyBlock.blockPos : null;
@@ -131,11 +122,8 @@ public class SpeedMineModule extends Module {
 
         boolean holdRebreak = rebreakHoldTicks > 0 && rebreakBlock != null
                 && rebreakBlock.blockPos.equals(rebreakHoldPos);
-        if (eatingMainhand) {
-            handleEatingMine(restoredEatingBorrow);
-        }
 
-        if (!eatingMainhand && hasDelayedDestroy()
+        if (hasDelayedDestroy()
                 && delayedDestroyBlock.ticksHeldPickaxe <= singleBreakFailTicks.getValue()) {
             BlockState state = mc.level.getBlockState(delayedDestroyBlock.blockPos);
             if (delayedDestroyBlock.isReady()) {
@@ -151,7 +139,7 @@ public class SpeedMineModule extends Module {
 
         boolean proactiveRebreak = rebreakBlock != null && rebreakBlock.beenAir
                 && autoMineTargetSelected();
-        if (!eatingMainhand && rebreakBlock != null
+        if (rebreakBlock != null
                 && (proactiveRebreak || rebreakBlock.isReady()) && !holdRebreak) {
             if (inBreakRange(rebreakBlock.blockPos)) {
                 BlockState state = mc.level.getBlockState(rebreakBlock.blockPos);
@@ -168,7 +156,7 @@ public class SpeedMineModule extends Module {
             }
         }
 
-        if (!eatingMainhand && hasDelayedDestroy()
+        if (hasDelayedDestroy()
                 && delayedDestroyBlock.ticksHeldPickaxe > singleBreakFailTicks.getValue()) {
             if (inBreakRange(delayedDestroyBlock.blockPos)) {
                 delayedDestroyBlock.startBreaking(true);
@@ -181,24 +169,6 @@ public class SpeedMineModule extends Module {
         boolean delayedDestroyFinished = !(hasDelayedDestroy() && delayedDestroyBlock.isReady());
         if (needDelayedDestroySwapBack && delayedDestroyFinished) {
             endDelayedDestroySwap();
-        }
-    }
-
-    private void handleEatingMine(boolean restoredThisTick) {
-        if (needDelayedDestroySwapBack) endDelayedDestroySwap();
-
-        if (!hasDelayedDestroy()) return;
-        if (!delayedDestroyBlock.isReady()) return;
-        if (restoredThisTick) {
-            delayedDestroyBlock.pauseOneTick();
-            return;
-        }
-
-        Result tool = findFastestTool(mc.level.getBlockState(delayedDestroyBlock.blockPos), false);
-        if (beginEatingBorrow(tool)) {
-            delayedDestroyBlock.ticksHeldPickaxe++;
-        } else {
-            delayedDestroyBlock.pauseOneTick();
         }
     }
 
@@ -371,44 +341,6 @@ public class SpeedMineModule extends Module {
         delayedDestroySwapResult = result;
         needDelayedDestroySwapBack = true;
         return true;
-    }
-
-    private boolean beginEatingBorrow(Result result) {
-        if (eatingBorrowed || !result.found() || result.holding()) return false;
-        if (mc.player.containerMenu.containerId != 0 || !InventoryUtil.cursor().isEmpty()) return false;
-
-        int selectedSlot = InventoryUtil.selected();
-        if (!InventoryUtil.altSwapInto(result, selectedSlot)) return false;
-        eatingBorrowResult = result;
-        eatingBorrowSlot = selectedSlot;
-        eatingBorrowed = true;
-        return true;
-    }
-
-    private boolean restoreEatingBorrow() {
-        if (!eatingBorrowed) return false;
-        if (mc.player == null || mc.gameMode == null) {
-            eatingBorrowResult = null;
-            eatingBorrowSlot = -1;
-            eatingBorrowed = false;
-            return false;
-        }
-
-        if (eatingBorrowResult != null) {
-            InventoryUtil.altSwapInto(eatingBorrowResult, eatingBorrowSlot);
-        }
-        eatingBorrowResult = null;
-        eatingBorrowSlot = -1;
-        eatingBorrowed = false;
-        return true;
-    }
-
-    private boolean isEatingMainhand() {
-        if (!mc.player.isUsingItem() || mc.player.getUsedItemHand() != InteractionHand.MAIN_HAND) return false;
-        ItemStack useItem = mc.player.getUseItem();
-        if (useItem.has(DataComponents.FOOD)) return true;
-        ItemUseAnimation animation = useItem.getUseAnimation();
-        return animation == ItemUseAnimation.EAT || animation == ItemUseAnimation.DRINK;
     }
 
     private boolean autoMineTargetSelected() {
@@ -597,10 +529,6 @@ public class SpeedMineModule extends Module {
 
         private void cancelBreaking() {
             sendAction(ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, blockPos, direction, false);
-        }
-
-        private void pauseOneTick() {
-            destroyProgressStart += 1.0;
         }
 
         private double getBreakProgress() {
