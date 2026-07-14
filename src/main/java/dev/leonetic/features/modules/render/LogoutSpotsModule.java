@@ -32,6 +32,7 @@ public class LogoutSpotsModule extends Module {
     public Setting<Color>   sideColor = color("SideColor",  255, 100, 100,  55);
     public Setting<Float>   lineWidth = num("LineWidth",    1.5f, 0.5f, 5.0f);
     public Setting<Boolean> showTime  = bool("ShowTime",    true);
+    public Setting<Boolean> showTurtle = bool("ShowTurtle", true);
     public Setting<Color>   nameColor = color("NameColor",  255, 100, 100, 255);
 
     private static final EquipmentSlot[] ARMOR_SLOTS = {
@@ -153,7 +154,7 @@ public class LogoutSpotsModule extends Module {
             String timeStr = showTime.getValue() ? " " + formatElapsed(spot.logoutTime) : "";
             nametags.renderNametag(graphics, spot.pos.x, tagY, spot.pos.z, dist,
                     spot.name, nameColor.getValue().getRGB(), timeStr,
-                    spot.totemPops, spot.armor, spot.mainHand, spot.offHand);
+                    spot.totemPops, turtleSecondsLeft(spot), spot.armor, spot.mainHand, spot.offHand);
         }
     }
 
@@ -170,6 +171,14 @@ public class LogoutSpotsModule extends Module {
         lastLevel = null;
     }
 
+    private int turtleSecondsLeft(LogoutSpot spot) {
+        if (!showTurtle.getValue() || spot.turtleExpiresAtMs <= 0L) return -1;
+        if (spot.turtleExpiresAtMs == Long.MAX_VALUE) return Integer.MAX_VALUE;
+
+        long remainingMs = spot.turtleExpiresAtMs - System.currentTimeMillis();
+        return remainingMs <= 0L ? -1 : (int) Math.ceil(remainingMs / 1000.0);
+    }
+
     private String formatElapsed(long logoutTime) {
         long secs = (System.currentTimeMillis() - logoutTime) / 1000;
         return String.format("%02d:%02d", secs / 60, secs % 60);
@@ -184,6 +193,7 @@ public class LogoutSpotsModule extends Module {
         final ItemStack mainHand;
         final ItemStack offHand;
         final int totemPops;
+        final long turtleExpiresAtMs;
         final ResourceKey<Level> dimension;
 
         SpotData(Player player, ResourceKey<Level> dimension) {
@@ -193,6 +203,7 @@ public class LogoutSpotsModule extends Module {
             this.entity    = player;
             this.dimension = dimension;
             this.totemPops = Homovore.playerInfoManager.getTotemPops(player.getUUID());
+            this.turtleExpiresAtMs = Homovore.turtleMasterManager.getExpiryMs(player.getUUID());
             this.mainHand  = player.getMainHandItem().copy();
             this.offHand   = player.getOffhandItem().copy();
             this.armor     = new EnumMap<>(EquipmentSlot.class);
@@ -211,12 +222,14 @@ public class LogoutSpotsModule extends Module {
         public final ItemStack mainHand;
         public final ItemStack offHand;
         public final int totemPops;
+        public final long turtleExpiresAtMs;
         public final long logoutTime;
         public final ResourceKey<Level> dimension;
 
         public List<float[][]> capturedGeometry = null;
 
         LogoutSpot(SpotData data) {
+            this.turtleExpiresAtMs = data.turtleExpiresAtMs;
             this.name       = data.name;
             this.uuid       = data.uuid;
             this.pos        = data.pos;
