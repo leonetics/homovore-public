@@ -16,6 +16,7 @@
     "client.MixinGuiGraphics",
     "client.MixinOptions",
     "client.MixinPlayerTabOverlay",
+    "client.MixinSoundManager",
     "client.OptionInstanceAccessor",
     "client.PlayerTabOverlayAccessor",
     "entity.EntityRotationAccessor",
