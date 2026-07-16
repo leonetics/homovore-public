@@ -3,14 +3,18 @@ package dev.leonetic.mixin.network;
 import dev.leonetic.Homovore;
 import dev.leonetic.event.impl.entity.TotemPopEvent;
 import dev.leonetic.event.impl.network.ChatEvent;
+import dev.leonetic.event.impl.network.IncomingChatEvent;
 import dev.leonetic.features.modules.movement.VelocityModule;
 import dev.leonetic.features.modules.player.NoRotateModule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
+import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
@@ -84,6 +88,29 @@ public class MixinClientPlayNetworkHandler {
         if (EVENT_BUS.post(new ChatEvent(content))) {
             ci.cancel();
         }
+    }
+
+    @Inject(method = "handlePlayerChat", at = @At("TAIL"))
+    private void handlePlayerChatHook(ClientboundPlayerChatPacket packet, CallbackInfo ci) {
+        String content = packet.unsignedContent() != null
+                ? packet.unsignedContent().getString()
+                : packet.body().content();
+        String rendered = packet.chatType().decorate(net.minecraft.network.chat.Component.literal(content)).getString();
+        EVENT_BUS.post(new IncomingChatEvent(content, rendered, packet.sender(), IncomingChatEvent.Type.PLAYER));
+    }
+
+    @Inject(method = "handleSystemChat", at = @At("TAIL"))
+    private void handleSystemChatHook(ClientboundSystemChatPacket packet, CallbackInfo ci) {
+        if (packet.overlay()) return;
+        String content = packet.content().getString();
+        EVENT_BUS.post(new IncomingChatEvent(content, content, null, IncomingChatEvent.Type.SYSTEM));
+    }
+
+    @Inject(method = "handleDisguisedChat", at = @At("TAIL"))
+    private void handleDisguisedChatHook(ClientboundDisguisedChatPacket packet, CallbackInfo ci) {
+        String content = packet.message().getString();
+        String rendered = packet.chatType().decorate(packet.message()).getString();
+        EVENT_BUS.post(new IncomingChatEvent(content, rendered, null, IncomingChatEvent.Type.DISGUISED));
     }
 
     @Inject(method = "handleEntityEvent", at = @At("HEAD"))

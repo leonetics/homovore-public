@@ -1,11 +1,15 @@
 package dev.leonetic.mixin.client;
 
+import dev.leonetic.features.modules.client.ChatMentionsModule;
 import dev.leonetic.util.player.ChatUtil;
 import net.minecraft.client.GuiMessage;
+import net.minecraft.client.GuiMessageTag;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MessageSignature;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,6 +28,27 @@ public abstract class MixinChatComponent {
     @Unique private float homovore$offset;
     @Unique private GuiMessage.Line homovore$lastHead;
     @Unique private long homovore$lastTimeMs;
+    @Unique private boolean homovore$decoratingMention;
+
+    @Inject(
+            method = "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/GuiMessageTag;)V",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void homovore$decorateMention(Component message, MessageSignature signature, GuiMessageTag tag, CallbackInfo ci) {
+        if (homovore$decoratingMention) return;
+
+        Component decorated = ChatMentionsModule.decorate(message);
+        if (decorated == message) return;
+
+        ci.cancel();
+        homovore$decoratingMention = true;
+        try {
+            ((ChatComponent) (Object) this).addMessage(decorated, signature, tag);
+        } finally {
+            homovore$decoratingMention = false;
+        }
+    }
 
     @Inject(
             method = "render(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/client/gui/Font;IIIZZ)V",

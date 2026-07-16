@@ -12,10 +12,13 @@ import dev.leonetic.features.modules.combat.*;
 import dev.leonetic.features.modules.player.*;
 import dev.leonetic.features.settings.Bind;
 import dev.leonetic.features.modules.client.ClickGuiModule;
+import dev.leonetic.features.modules.client.ChatMentionsModule;
 import dev.leonetic.features.modules.client.HudClientModule;
 import dev.leonetic.features.modules.client.NotificationsModule;
+import dev.leonetic.features.modules.client.SoundBlockerModule;
 import dev.leonetic.features.modules.client.TargetsModule;
 import dev.leonetic.features.modules.client.TeleportLoggerModule;
+import dev.leonetic.features.modules.client.VisualRangeModule;
 import dev.leonetic.features.modules.funny.TrickshotModule;
 import dev.leonetic.features.modules.funny.MoFuckerModule;
 import dev.leonetic.features.modules.movement.SprintModule;
@@ -66,9 +69,12 @@ public class ModuleManager implements Jsonable, Util {
     public void init() {
         register(new HudClientModule());
         register(new ClickGuiModule());
+        register(new ChatMentionsModule());
         register(new NotificationsModule());
         register(new TargetsModule());
         register(new TeleportLoggerModule());
+        register(new VisualRangeModule());
+        register(new SoundBlockerModule());
         register(new AutoTrapModule());
         register(new OffhandModule());
         register(new AutoLogModule());
