@@ -34,6 +34,7 @@ public class Homovore implements ModInitializer, ClientModInitializer {
     public static SwapManager swapManager;
     public static TPSCounterService tpsCounterService;
     public static GuiMove guiMove;
+    public static AccountManager accountManager;
 
     @Override
     public void onInitialize() {
@@ -84,7 +85,11 @@ public class Homovore implements ModInitializer, ClientModInitializer {
                     .forEach(dev.leonetic.features.modules.Module::disable);
         }
         moduleManager.onLoad();
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> configManager.save()));
+        accountManager = new AccountManager();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            configManager.save();
+            if (accountManager != null) accountManager.save();
+        }));
 
         long endTime = System.nanoTime();
 
