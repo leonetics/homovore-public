@@ -28,6 +28,7 @@
     "entity.MixinEntityRenderer",
     "entity.MixinLivingEntityTravel",
     "entity.MixinLocalPlayerRotation",
+    "client.MixinTitleScreen",
     "input.MixinKeyboard",
     "input.MixinMouse",
     "network.MixinClientCommonPacketListenerImpl",
