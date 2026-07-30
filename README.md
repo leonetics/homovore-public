@@ -21,7 +21,7 @@
   </a>
 </p>
 
-**Homovore** is a 2b2t PVP client, written by Leonetic and WiderThanEurasia.
+**Homovore** is an open source 2b2t PVP client, written by Leonetic, WiderThanEurasia, Crabs3/dmt, a_viktor, ZyZa, And many other contributors.
 
 This project is a clean and open-source yet modern alternative aiming to be transparent and easy to extend without relying on unsafe third-party clients.
 
